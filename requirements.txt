@@ -1,0 +1,16 @@
+streamlit
+streamlit_antd_components
+docx2txt
+pandas
+webvtt-py
+python-docx
+spacy
+openai
+pyperclip
+PyPDF2
+PyMuPDF
+# Core RAG dependencies
+langchain>=0.0.335
+chromadb
+# Additional needed packages
+typing-extensions
