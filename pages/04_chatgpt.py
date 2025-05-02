@@ -203,7 +203,6 @@ if "gpt_api_key" not in st.session_state:
                                         st.session_state["saved_anonymisation"] = {
                                             "Title": latest_doc["title"],
                                             "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                            "Data": "",  # Content not needed for querying
                                             "Entities": {}  # Entities might not be necessary for querying
                                         }
                         except Exception as e:
@@ -314,39 +313,14 @@ else:
         # Check if this anonymization has already been processed
         if anon_key not in st.session_state.processed_anonymizations and "vector_db" in st.session_state:
             # We have a new document to add to the existing vector DB
-            with st.spinner(f"Adding new document '{st.session_state['saved_anonymisation']['Title']}' to the database..."):
-                # Get document info
-                document_title = st.session_state["saved_anonymisation"]["Title"]
-                document_content = st.session_state["saved_anonymisation"]["Data"]
-                
-                # Add to vector database
-                st.session_state.vector_db = lib.create_vector_db_from_text(
-                    document_content, 
-                    document_title, 
-                    st.session_state["gpt_api_key"]
-                )
-                
-                if st.session_state.vector_db is not None:
-                    st.success(f"Document '{document_title}' added successfully to the database!")
-                    # Mark as processed
-                    st.session_state.processed_anonymizations.add(anon_key)
-                else:
-                    st.error(f"Failed to add document '{document_title}' to the database.")
-                
-        elif anon_key not in st.session_state.processed_anonymizations and "vector_db" not in st.session_state:
-            # This is the first document, and we need to create the vector DB
-            with st.spinner("Processing your document... This might take a minute."):
-                # Check if RAG is available
-                if not hasattr(lib, 'RAG_AVAILABLE') or not lib.RAG_AVAILABLE:
-                    st.warning("RAG functionality is not available. The app will use the traditional chunking approach instead.")
-                    # Set vector_db to None to skip RAG-related code
-                    st.session_state.vector_db = None
-                else:
-                    # Create vector database from anonymized content
+            # Only process if we have actual document data
+            if "Data" in st.session_state["saved_anonymisation"] and st.session_state["saved_anonymisation"]["Data"]:
+                with st.spinner(f"Adding new document '{st.session_state['saved_anonymisation']['Title']}' to the database..."):
+                    # Get document info
                     document_title = st.session_state["saved_anonymisation"]["Title"]
                     document_content = st.session_state["saved_anonymisation"]["Data"]
                     
-                    # Create vector database
+                    # Add to vector database
                     st.session_state.vector_db = lib.create_vector_db_from_text(
                         document_content, 
                         document_title, 
@@ -354,13 +328,42 @@ else:
                     )
                     
                     if st.session_state.vector_db is not None:
-                        st.success(f"Document processed successfully! You can now ask questions about '{document_title}'")
+                        st.success(f"Document '{document_title}' added successfully to the database!")
                         # Mark as processed
                         st.session_state.processed_anonymizations.add(anon_key)
                     else:
-                        st.error("Failed to process document with RAG. Falling back to traditional approach.")
-                        # Set vector_db to None to indicate RAG is not available
+                        st.error(f"Failed to add document '{document_title}' to the database.")
+                
+        elif anon_key not in st.session_state.processed_anonymizations and "vector_db" not in st.session_state:
+            # This is the first document, and we need to create the vector DB
+            # Only process if we have actual document data
+            if "Data" in st.session_state["saved_anonymisation"] and st.session_state["saved_anonymisation"]["Data"]:
+                with st.spinner("Processing your document... This might take a minute."):
+                    # Check if RAG is available
+                    if not hasattr(lib, 'RAG_AVAILABLE') or not lib.RAG_AVAILABLE:
+                        st.warning("RAG functionality is not available. The app will use the traditional chunking approach instead.")
+                        # Set vector_db to None to skip RAG-related code
                         st.session_state.vector_db = None
+                    else:
+                        # Create vector database from anonymized content
+                        document_title = st.session_state["saved_anonymisation"]["Title"]
+                        document_content = st.session_state["saved_anonymisation"]["Data"]
+                        
+                        # Create vector database
+                        st.session_state.vector_db = lib.create_vector_db_from_text(
+                            document_content, 
+                            document_title, 
+                            st.session_state["gpt_api_key"]
+                        )
+                        
+                        if st.session_state.vector_db is not None:
+                            st.success(f"Document processed successfully! You can now ask questions about '{document_title}'")
+                            # Mark as processed
+                            st.session_state.processed_anonymizations.add(anon_key)
+                        else:
+                            st.error("Failed to process document with RAG. Falling back to traditional approach.")
+                            # Set vector_db to None to indicate RAG is not available
+                            st.session_state.vector_db = None
 
     # Display chat header and existing messages
     for message in st.session_state.messages:
@@ -381,6 +384,10 @@ else:
                 st.warning("Document database not created. Please try processing your document again.")
             else:
                 st.info("Using traditional question answering. RAG functionality is not available.")
+        else:
+            # Check if we're using a previously stored document without its content
+            if "saved_anonymisation" in st.session_state and ("Data" not in st.session_state["saved_anonymisation"] or not st.session_state["saved_anonymisation"].get("Data")):
+                st.info("You're viewing previously stored document sources. You can ask questions about these documents from previous sessions.")
         
         # Chat input for user questions
         if prompt := st.chat_input("Ask a question about your document", max_chars=8000):
