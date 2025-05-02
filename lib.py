@@ -415,9 +415,18 @@ def load_document_metadata(persist_directory):
 def save_document_metadata(persist_directory, metadata):
     """
     Save metadata for documents stored in the vector database.
+    Include additional fields for document management.
     """
     metadata_path = get_metadata_path(persist_directory)
     os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
+    
+    # Add timestamp if not present and active status
+    for doc_hash, doc_data in metadata.items():
+        if 'timestamp' not in doc_data:
+            doc_data['timestamp'] = time.time()
+        if 'active' not in doc_data:
+            doc_data['active'] = True
+    
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f)
 
@@ -566,9 +575,10 @@ def create_vector_db_from_text(text, title, api_key):
     
     return collection
 
-def query_vector_db(collection, query, n_results=5):
+def query_vector_db(collection, query, n_results=5, selected_doc_sources=None):
     """
     Query the vector database with a user question.
+    Filter by selected document sources if provided.
     """
     # Check if RAG functionality is available
     if not RAG_AVAILABLE:
@@ -578,16 +588,39 @@ def query_vector_db(collection, query, n_results=5):
     if collection is None:
         return [], []
     
-    # Perform similarity search
-    results = collection.query(
-        query_texts=[query],
-        n_results=n_results
-    )
-    
-    # Extract and return relevant texts and their metadata
-    if results and 'documents' in results and results['documents'] and len(results['documents']) > 0:
-        return results['documents'][0], results['metadatas'][0]
-    else:
+    try:
+        # First, perform the query without filters to get the best semantic matches
+        unfiltered_results = collection.query(
+            query_texts=[query],
+            n_results=n_results * 3  # Get more results than needed to allow for filtering
+        )
+        
+        # If no results or no document source filtering needed, return the unfiltered results
+        if not unfiltered_results["documents"][0] or not selected_doc_sources:
+            if unfiltered_results["documents"] and len(unfiltered_results["documents"][0]) > 0:
+                return unfiltered_results["documents"][0][:n_results], unfiltered_results["metadatas"][0][:n_results]
+            return [], []
+        
+        # If we have document sources selected, filter the results manually
+        filtered_docs = []
+        filtered_metadatas = []
+        
+        for i, doc_id in enumerate(unfiltered_results["ids"][0]):
+            # Check if this document belongs to any of the selected sources
+            if any(doc_hash in doc_id for doc_hash in selected_doc_sources):
+                filtered_docs.append(unfiltered_results["documents"][0][i])
+                filtered_metadatas.append(unfiltered_results["metadatas"][0][i])
+                
+                # Break if we have enough results
+                if len(filtered_docs) >= n_results:
+                    break
+        
+        # Return the filtered results, or empty if no matches
+        return filtered_docs, filtered_metadatas
+        
+    except Exception as e:
+        st.error(f"Error querying vector database: {e}")
+        st.error(f"Query: {query}, Selected sources: {selected_doc_sources}")
         return [], []
 
 def generate_rag_response(client, query, context_docs, context_metadatas, model, chat_history=None):
@@ -800,3 +833,105 @@ def check_cleanup_requests():
                 os.remove(marker_file)
             except:
                 pass
+
+def delete_document_from_vector_db(document_hash):
+    """
+    Delete a specific document from the vector database.
+    
+    Args:
+        document_hash: Hash of the document to delete
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    # Check if RAG functionality is available
+    if not RAG_AVAILABLE:
+        st.error("RAG functionality is not available. No database to modify.")
+        return False
+    
+    try:
+        # Persistent directory configuration
+        persist_directory = './chroma_db'
+        
+        # Close any existing connections in the session state
+        reset_vector_db_connection = False
+        if "vector_db" in st.session_state:
+            # Store this to reconnect later
+            reset_vector_db_connection = True
+            # Force close the collection connection
+            st.session_state["vector_db"] = None
+            del st.session_state["vector_db"]
+        
+        # Explicitly run garbage collection to help release file handles
+        import gc
+        gc.collect()
+        
+        # Load metadata
+        document_metadata = load_document_metadata(persist_directory)
+        
+        # Check if document exists
+        if document_hash not in document_metadata:
+            st.warning(f"Document with hash {document_hash} not found in metadata.")
+            return False
+        
+        # Get document info for user feedback
+        doc_title = document_metadata[document_hash].get('title', 'Unknown document')
+        
+        # Remove from metadata
+        del document_metadata[document_hash]
+        save_document_metadata(persist_directory, document_metadata)
+        
+        # Connect to ChromaDB to delete the document chunks
+        try:
+            client = chromadb.PersistentClient(
+                path=persist_directory,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
+            )
+            
+            # Get the collection
+            collection = client.get_collection("document_collection")
+            
+            # First get all IDs that contain our document hash
+            all_ids = collection.get(include=[])["ids"]
+            matching_ids = [doc_id for doc_id in all_ids if document_hash in doc_id]
+            
+            # Delete all matched IDs
+            if matching_ids:
+                collection.delete(
+                    ids=matching_ids
+                )
+            
+            # Reconnect if needed
+            if reset_vector_db_connection and "gpt_api_key" in st.session_state:
+                # Create embedding function with current API key
+                embedding_function = OpenAIEmbeddingFunction(api_key=st.session_state["gpt_api_key"])
+                
+                # Reconnect to the collection
+                collection = client.get_collection(
+                    name="document_collection", 
+                    embedding_function=embedding_function
+                )
+                
+                # Store in session state
+                st.session_state.vector_db = collection
+                
+                # Update selected docs
+                if "selected_doc_sources" in st.session_state:
+                    st.session_state.selected_doc_sources = [
+                        doc_hash for doc_hash in st.session_state.selected_doc_sources 
+                        if doc_hash != document_hash
+                    ]
+            
+            st.success(f"Document '{doc_title}' has been removed from the database.")
+            return True
+            
+        except Exception as e:
+            st.error(f"Error accessing ChromaDB: {e}")
+            return False
+        
+    except Exception as e:
+        st.error(f"Error deleting document: {e}")
+        return False
