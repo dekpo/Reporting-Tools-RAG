@@ -2,7 +2,6 @@
 import streamlit as st
 import streamlit_antd_components as sac
 import spacy
-import pymupdf
 from typing import List, Union, Dict, Any
 from openai import OpenAI
 import os
@@ -90,6 +89,33 @@ def save_anonymisation(title,content,entities):
     }
 
 def save_gpt_answers(title,content,entities,attendees={}):
+    # Ensure entities have the expected structure
+    if not entities or not isinstance(entities, dict):
+        entities = {
+            "Text": [],
+            "Replacement": [],
+            "Category": []
+        }
+    elif "Text" not in entities or "Replacement" not in entities or "Category" not in entities:
+        # Create a properly structured entities dictionary
+        structured_entities = {
+            "Text": [],
+            "Replacement": [],
+            "Category": []
+        }
+        # Try to copy any existing data
+        if "Text" in entities:
+            structured_entities["Text"] = entities["Text"]
+        if "Replacement" in entities:
+            structured_entities["Replacement"] = entities["Replacement"]
+        if "Category" in entities:
+            structured_entities["Category"] = entities["Category"]
+        entities = structured_entities
+    
+    # Ensure attendees have the expected structure
+    if not attendees or not isinstance(attendees, dict):
+        attendees = {}
+    
     st.session_state["saved_gpt_answers"] = {
         "Time": current_datetime,
         "Title": title,

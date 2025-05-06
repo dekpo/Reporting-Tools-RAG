@@ -42,11 +42,11 @@ if "gpt_api_key" not in st.session_state:
             st.info(f"Found {len(document_metadata)} document(s) in storage. After submitting your API key, you'll be able to access them.")
 
     MY_API_KEY = st.text_input(
-            label="**Please specify your OpenAI API Key** this one is for testing purpose.",
+            label="**Please specify your own OpenAI API Key** this one is for testing purpose you can use it and buy me a coffee ;)",
             value=st.secrets["OPENAI_API_KEY"]
         )
 
-    st.markdown("<a href=\"https://platform.openai.com/api-keys\" target=\"_blank\">Get your OpenAI API key here !</a>",unsafe_allow_html=True)
+    st.markdown("<a href=\"https://platform.openai.com/api-keys\" class=\"link-primary\" target=\"_blank\">Or get your own OpenAI API key here !</a>",unsafe_allow_html=True)
 
     # Define model options with categorization
     model_options = {
@@ -203,7 +203,25 @@ if "gpt_api_key" not in st.session_state:
                                         st.session_state["saved_anonymisation"] = {
                                             "Title": latest_doc["title"],
                                             "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                            "Entities": {}  # Entities might not be necessary for querying
+                                            "Entities": {
+                                                "Text": [],
+                                                "Replacement": [],
+                                                "Category": []
+                                            }  # Ensure entities have the proper structure
+                                        }
+                                        
+                                        # Also initialize saved_gpt_answers with the same document
+                                        # This ensures the revert page will have access to the document
+                                        st.session_state["saved_gpt_answers"] = {
+                                            "Title": latest_doc["title"],
+                                            "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                            "Data": "",  # Will be populated with conversation content
+                                            "Entities": {
+                                                "Text": [],
+                                                "Replacement": [],
+                                                "Category": []
+                                            },
+                                            "Attendees": {}
                                         }
                         except Exception as e:
                             st.error(f"Error loading document database: {e}")
@@ -293,7 +311,7 @@ else:
             st.info("No documents found in the database. Process a document to add it to the sources.")
         st.divider()
 
-    st.markdown("<p>Ask questions about your anonymized content. The AI will provide relevant answers based on the context of your document.</p>",unsafe_allow_html=True)
+    st.markdown("<p>Ask questions about your anonymized content. The AI will provide relevant answers based on the context of your document(s).</p>",unsafe_allow_html=True)
 
     client = OpenAI(api_key=st.session_state["gpt_api_key"])
 
@@ -521,7 +539,7 @@ else:
     # Document management interface
     if "saved_anonymisation" in st.session_state:
         st.divider()
-        st.subheader("Document Management")
+        st.subheader("Conversation Management")
         
         col1, col2, col3 = st.columns(3)
         
@@ -608,61 +626,57 @@ else:
         st.divider()
         st.subheader("Advanced Settings")
         
-        col_left, col_right = st.columns(2)
+        # Display current model and provide model information
+        st.info(f"Current model: **{st.session_state['openai_model']}**")
         
-        with col_left:
-            # Clear Vector Database button
-            if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
-                # Only show this button if RAG is available
-                if st.button("Clear Vector Database", type="secondary", use_container_width=True):
-                    with st.spinner("Clearing vector database..."):
-                        success = lib.clear_vector_database()
-                        if success:
-                            st.success("Vector database cleared successfully!")
-                            # Also clear the vector_db from session state
-                            if "vector_db" in st.session_state:
-                                del st.session_state["vector_db"]
-                            if "selected_doc_sources" in st.session_state:
-                                del st.session_state["selected_doc_sources"]
-                            if "processed_anonymizations" in st.session_state:
-                                del st.session_state["processed_anonymizations"]
+        # Add model information based on the selected model
+        model_info = {
+            "gpt-4o": "Latest and most capable model, optimized for performance and cost-effectiveness.",
+            "gpt-4-turbo": "Powerful model with strong reasoning capabilities and knowledge up to Apr 2023.",
+            "gpt-4": "Original GPT-4 model with high accuracy and reasoning capabilities.",
+            "gpt-3.5-turbo": "Fast and cost-effective model for most general tasks. 16K context window."
+        }
+        
+        if st.session_state["openai_model"] in model_info:
+            st.caption(model_info[st.session_state["openai_model"]])
+        
+        # Model rate information
+        st.caption("**Note:** Different models have different pricing. Check [OpenAI pricing](https://openai.com/pricing) for details.")
+        
+        # Add a button to reset API key and change model
+        if st.button("Change AI Model", use_container_width=True):
+            del st.session_state["gpt_api_key"]
+            del st.session_state["openai_model"]
+            # Clear vector DB session state if it exists
+            if "vector_db" in st.session_state:
+                del st.session_state["vector_db"]
+            st.rerun()
+        
+        # Clear Vector Database button
+        if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
+            # Only show this button if RAG is available
+            if st.button("Clear Vector Database", type="secondary", use_container_width=True):
+                with st.spinner("Clearing vector database..."):
+                    success = lib.clear_vector_database()
+                    if success:
+                        st.success("Vector database cleared successfully!")
+                        # Also clear the vector_db from session state
+                        if "vector_db" in st.session_state:
+                            del st.session_state["vector_db"]
+                        if "selected_doc_sources" in st.session_state:
+                            del st.session_state["selected_doc_sources"]
+                        if "processed_anonymizations" in st.session_state:
+                            del st.session_state["processed_anonymizations"]
+                        st.rerun()
+                    else:
+                        st.error("Failed to clear vector database. If you're seeing a file access error, this could be due to Windows file locks. Try restarting the application.")
+                        if st.button("Restart Application", key="restart_app_button"):
                             st.rerun()
-                        else:
-                            st.error("Failed to clear vector database. If you're seeing a file access error, this could be due to Windows file locks. Try restarting the application.")
-                            if st.button("Restart Application", key="restart_app_button"):
-                                st.rerun()
-            else:
-                st.info("RAG functionality not available.")
+        else:
+            st.info("RAG functionality not available.")
         
-        with col_right:
-            # Display current model and provide model information
-            st.info(f"Current model: **{st.session_state['openai_model']}**")
-            
-            # Add model information based on the selected model
-            model_info = {
-                "gpt-4o": "Latest and most capable model, optimized for performance and cost-effectiveness.",
-                "gpt-4-turbo": "Powerful model with strong reasoning capabilities and knowledge up to Apr 2023.",
-                "gpt-4": "Original GPT-4 model with high accuracy and reasoning capabilities.",
-                "gpt-3.5-turbo": "Fast and cost-effective model for most general tasks. 16K context window."
-            }
-            
-            if st.session_state["openai_model"] in model_info:
-                st.caption(model_info[st.session_state["openai_model"]])
-            
-            # Model rate information
-            st.caption("**Note:** Different models have different pricing. Check [OpenAI pricing](https://openai.com/pricing) for details.")
-            
-            # Add a button to reset API key and change model
-            if st.button("Change AI Model", use_container_width=True):
-                del st.session_state["gpt_api_key"]
-                del st.session_state["openai_model"]
-                # Clear vector DB session state if it exists
-                if "vector_db" in st.session_state:
-                    del st.session_state["vector_db"]
-                st.rerun()
-            
-            # Add a debug toggle (hidden behind a "secret" checkbox)
-            if st.checkbox("Enable debug mode", key="debug_toggle", value=False):
-                st.session_state.show_debug = True
-            else:
-                st.session_state.show_debug = False
+        # Add a debug toggle (hidden behind a "secret" checkbox)
+        if st.checkbox("Enable debug mode", key="debug_toggle", value=False):
+            st.session_state.show_debug = True
+        else:
+            st.session_state.show_debug = False

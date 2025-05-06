@@ -31,13 +31,42 @@ st.markdown("<p>Re-insert entities ( people, organizations, locations...) to you
 st.subheader("Your Content's Entities")
 if "saved_gpt_answers" in st.session_state:
     saved_entities = st.session_state["saved_gpt_answers"]["Entities"]
+    
+    # Check if entities have the expected structure
+    if not saved_entities or "Text" not in saved_entities:
+        st.warning("The entities data is not in the expected format. This might be because you're accessing a document from a previous session.")
+        
+        # Create a default structure for entities if missing
+        saved_entities = {
+            "Text": [],
+            "Replacement": [],
+            "Category": []
+        }
+        # Update the session state with the default structure
+        st.session_state["saved_gpt_answers"]["Entities"] = saved_entities
+    
     st.write(f'You have **{len(saved_entities["Text"])}** entities to reverse.')
 
     edited_entities = st.data_editor(saved_entities,disabled=["Replacement","Category"],use_container_width=True)
     
     saved_attendees = st.session_state["saved_gpt_answers"]["Attendees"]
 
-    if len(saved_attendees) > 0:
+    # Check if attendees have the expected structure
+    if not saved_attendees or not isinstance(saved_attendees, dict):
+        saved_attendees = {}
+        st.session_state["saved_gpt_answers"]["Attendees"] = saved_attendees
+    elif "Attendee" not in saved_attendees and len(saved_attendees) > 0:
+        st.warning("The attendees data is not in the expected format.")
+        saved_attendees = {
+            "Attendee": [],
+            "Replacement": []
+        }
+        st.session_state["saved_gpt_answers"]["Attendees"] = saved_attendees
+
+    # Initialize edited_attendees to None
+    edited_attendees = None
+    
+    if saved_attendees and "Attendee" in saved_attendees and len(saved_attendees["Attendee"]) > 0:
         st.subheader("The Meeting Attendees")
         st.write(f'You have **{len(saved_attendees["Attendee"])}** attendees to re-insert.')
 
@@ -60,17 +89,23 @@ if "saved_gpt_answers" in st.session_state:
     txt = st.session_state["saved_gpt_answers"]["Data"]
 
     if reverse_now:
-        for term in edited_entities["Replacement"]:
-            index = edited_entities["Replacement"].index(term)
-            replacement = edited_entities["Text"][index]
-            category = edited_entities["Category"][index]
-            if term:
-                txt = txt.replace(term,f'<span class="entity {category.lower()}">{replacement}</span>')
-        if len(saved_attendees) > 0:
-            for attendee in edited_attendees["Replacement"]:
-                index = edited_attendees["Replacement"].index(attendee)
-                replacement = edited_attendees["Attendee"][index]
-                txt = txt.replace(attendee,f'<span class="entity person">{replacement}</span>')
+        # Check if entities have the expected structure before processing
+        if "Replacement" in edited_entities and "Text" in edited_entities and "Category" in edited_entities:
+            for term in edited_entities["Replacement"]:
+                if term:  # Only process non-empty terms
+                    index = edited_entities["Replacement"].index(term)
+                    if index < len(edited_entities["Text"]) and index < len(edited_entities["Category"]):
+                        replacement = edited_entities["Text"][index]
+                        category = edited_entities["Category"][index]
+                        txt = txt.replace(term, f'<span class="entity {category.lower()}">{replacement}</span>')
+        
+        # Check if attendees have the expected structure before processing
+        if saved_attendees and "Attendee" in saved_attendees and "Replacement" in saved_attendees:
+            for i, attendee in enumerate(saved_attendees["Replacement"]):
+                if attendee and i < len(saved_attendees["Attendee"]):
+                    replacement = saved_attendees["Attendee"][i]
+                    txt = txt.replace(attendee, f'<span class="entity person">{replacement}</span>')
+    
     txt = txt.replace("$","\\$")
     txt = txt.replace("\n","<br>")
     content.markdown(txt,unsafe_allow_html=True)
