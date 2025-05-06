@@ -5,6 +5,9 @@ import pyperclip
 
 # Modules
 import io
+import json
+import base64
+from datetime import datetime
 
 # Utils
 import lib
@@ -47,7 +50,101 @@ if "saved_gpt_answers" in st.session_state:
     
     st.write(f'You have **{len(saved_entities["Text"])}** entities to reverse.')
 
-    edited_entities = st.data_editor(saved_entities,disabled=["Replacement","Category"],use_container_width=True)
+    # Add option to manually add entities
+    with st.expander("Add New Entity for Reverse Anonymization"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            new_text = st.text_input("Original Text (to restore)", key="new_entity_text")
+        with col2:
+            new_replacement = st.text_input("Anonymized Text (to replace)", key="new_entity_replacement")
+        with col3:
+            new_category = st.selectbox("Category", ["PERSON", "ORG", "GPE", "DATE", "OTHER"], key="new_entity_category")
+        
+        if st.button("Add Entity", key="add_entity_btn"):
+            if new_text and new_replacement:
+                # Add to entities
+                saved_entities["Text"].append(new_text)
+                saved_entities["Replacement"].append(new_replacement)
+                saved_entities["Category"].append(new_category)
+                
+                # Update session state
+                st.session_state["saved_gpt_answers"]["Entities"] = saved_entities
+                
+                # Clear inputs
+                st.session_state["new_entity_text"] = ""
+                st.session_state["new_entity_replacement"] = ""
+                
+                # Show success message
+                st.success(f"Added entity: {new_replacement} → {new_text}")
+                st.rerun()
+            else:
+                st.error("Please provide both original text and anonymized text")
+
+    # Display editable entities table
+    edited_entities = st.data_editor(saved_entities, disabled=["Replacement","Category"], use_container_width=True)
+    
+    # Add export/import functionality
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Export entities as JSON
+        if len(saved_entities["Text"]) > 0:
+            # Convert entities to JSON
+            entities_json = json.dumps(saved_entities, indent=2)
+            
+            # Create download link
+            b64 = base64.b64encode(entities_json.encode()).decode()
+            export_filename = f"entities_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            href = f'<a href="data:application/json;base64,{b64}" download="{export_filename}">Download Entities as JSON</a>'
+            st.markdown(href, unsafe_allow_html=True)
+    
+    with col2:
+        # Import entities from JSON
+        uploaded_file = st.file_uploader("Import Entities from JSON", type=["json"])
+        if uploaded_file is not None:
+            try:
+                # Read and parse JSON
+                entities_data = json.loads(uploaded_file.getvalue().decode())
+                
+                # Validate structure
+                if "Text" in entities_data and "Replacement" in entities_data and "Category" in entities_data:
+                    # Update entities
+                    saved_entities = entities_data
+                    st.session_state["saved_gpt_answers"]["Entities"] = saved_entities
+                    
+                    # Show success message
+                    st.success(f"Imported {len(saved_entities['Text'])} entities successfully!")
+                    st.rerun()
+                else:
+                    st.error("Invalid entities JSON format")
+            except Exception as e:
+                st.error(f"Error importing entities: {e}")
+    
+    with col3:
+        # Save entities back to the database
+        if st.button("Save Entities to Database", key="save_entities_to_db"):
+            # Check if we have a document hash
+            persist_directory = './chroma_db'
+            document_metadata = lib.load_document_metadata(persist_directory)
+            
+            # Find document hash by title
+            doc_title = st.session_state["saved_gpt_answers"]["Title"]
+            doc_hash = None
+            
+            for hash_key, metadata in document_metadata.items():
+                if metadata.get('title') == doc_title:
+                    doc_hash = hash_key
+                    break
+            
+            if doc_hash:
+                # Update entities in the database
+                success = lib.update_document_entities(doc_hash, edited_entities)
+                if success:
+                    st.success(f"Entities saved to database for document '{doc_title}'")
+                else:
+                    st.error("Failed to save entities to database")
+            else:
+                st.warning(f"Could not find document '{doc_title}' in the database")
     
     saved_attendees = st.session_state["saved_gpt_answers"]["Attendees"]
 
@@ -78,7 +175,7 @@ if "saved_gpt_answers" in st.session_state:
     
     st.write("""<div id='top-content'></div>""",unsafe_allow_html=True)
 
-    st.subheader("Your Anonymized Content To Reverse is Below:")
+    st.subheader("Your Anonymized Content Reversed is Below:")
 
     st.markdown("<p><a href='#download-or-save-your-data'>🔽Download Or Copy Your Data At The Bottom Of This Page🔽</a></p>",unsafe_allow_html=True)
 

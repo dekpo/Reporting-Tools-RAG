@@ -200,14 +200,25 @@ if "gpt_api_key" not in st.session_state:
                                     if doc_list:
                                         # Set the latest document as the active document
                                         latest_doc = doc_list[0]
+                                        
+                                        # Get document hash to retrieve full metadata
+                                        doc_hash = latest_doc["hash"]
+                                        
+                                        # Get entities from metadata if available
+                                        entities_data = {
+                                            "Text": [],
+                                            "Replacement": [],
+                                            "Category": []
+                                        }
+                                        
+                                        # Check if this document has stored entities
+                                        if 'entities' in document_metadata[doc_hash]:
+                                            entities_data = document_metadata[doc_hash]['entities']
+                                        
                                         st.session_state["saved_anonymisation"] = {
                                             "Title": latest_doc["title"],
                                             "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                            "Entities": {
-                                                "Text": [],
-                                                "Replacement": [],
-                                                "Category": []
-                                            }  # Ensure entities have the proper structure
+                                            "Entities": entities_data  # Use stored entities if available
                                         }
                                         
                                         # Also initialize saved_gpt_answers with the same document
@@ -216,11 +227,7 @@ if "gpt_api_key" not in st.session_state:
                                             "Title": latest_doc["title"],
                                             "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                             "Data": "",  # Will be populated with conversation content
-                                            "Entities": {
-                                                "Text": [],
-                                                "Replacement": [],
-                                                "Category": []
-                                            },
+                                            "Entities": entities_data,  # Use stored entities if available
                                             "Attendees": {}
                                         }
                         except Exception as e:
@@ -270,7 +277,7 @@ else:
             # Create selection interface
             selected_docs = []
             for doc in doc_list:
-                col1, col2, col3 = st.columns([0.6, 0.2, 0.2])
+                col1, col2, col3, col4 = st.columns([0.5, 0.15, 0.15, 0.2])
                 with col1:
                     selected = st.checkbox(
                         f"{doc['title']} ({doc['chunks']} chunks)", 
@@ -292,12 +299,38 @@ else:
                                 success = lib.delete_document_from_vector_db(doc['hash'])
                                 if success:
                                     st.rerun()
-                                # Clear confirmation state
-                                st.session_state["confirm_delete"] = None
+                            # Clear confirmation state
+                            st.session_state["confirm_delete"] = None
                         else:
                             # Set confirmation state and show confirmation message
                             st.session_state["confirm_delete"] = doc['hash']
                             st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+                
+                with col4:
+                    # Add button to prepare document for reverse anonymization
+                    if st.button("Reverse Anonymize", key=f"reverse_{doc['hash']}"):
+                        with st.spinner(f"Loading '{doc['title']}' for reverse anonymization..."):
+                            # Get document content and entities
+                            doc_content, doc_title, entities_data = lib.get_document_content_from_hash(
+                                doc['hash'], 
+                                api_key=st.session_state["gpt_api_key"]
+                            )
+                            
+                            if doc_content:
+                                # Set up saved_gpt_answers for reverse anonymization
+                                st.session_state["saved_gpt_answers"] = {
+                                    "Title": doc_title,
+                                    "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                    "Data": doc_content,
+                                    "Entities": entities_data,
+                                    "Attendees": {}
+                                }
+                                
+                                # Redirect to reverse anonymization page
+                                st.success(f"Document '{doc_title}' loaded for reverse anonymization!")
+                                st.switch_page("pages/05_revert.py")
+                            else:
+                                st.error(f"Could not retrieve content for '{doc['title']}'")
             
             # Store selected documents in session state
             if "selected_doc_sources" not in st.session_state or st.session_state.selected_doc_sources != selected_docs:
@@ -337,12 +370,14 @@ else:
                     # Get document info
                     document_title = st.session_state["saved_anonymisation"]["Title"]
                     document_content = st.session_state["saved_anonymisation"]["Data"]
+                    document_entities = st.session_state["saved_anonymisation"]["Entities"]
                     
                     # Add to vector database
                     st.session_state.vector_db = lib.create_vector_db_from_text(
                         document_content, 
                         document_title, 
-                        st.session_state["gpt_api_key"]
+                        st.session_state["gpt_api_key"],
+                        document_entities  # Pass entities for reverse anonymization
                     )
                     
                     if st.session_state.vector_db is not None:
@@ -366,12 +401,14 @@ else:
                         # Create vector database from anonymized content
                         document_title = st.session_state["saved_anonymisation"]["Title"]
                         document_content = st.session_state["saved_anonymisation"]["Data"]
+                        document_entities = st.session_state["saved_anonymisation"]["Entities"]
                         
                         # Create vector database
                         st.session_state.vector_db = lib.create_vector_db_from_text(
                             document_content, 
                             document_title, 
-                            st.session_state["gpt_api_key"]
+                            st.session_state["gpt_api_key"],
+                            document_entities  # Pass entities for reverse anonymization
                         )
                         
                         if st.session_state.vector_db is not None:

@@ -497,9 +497,15 @@ def split_document_for_rag(text, chunk_size=1000, chunk_overlap=100):
     # Split the document
     return text_splitter.split_documents([doc])
 
-def create_vector_db_from_text(text, title, api_key):
+def create_vector_db_from_text(text, title, api_key, entities=None):
     """
     Create a vector database from text content.
+    
+    Args:
+        text: The document text to store
+        title: The document title
+        api_key: OpenAI API key for embeddings
+        entities: Optional dictionary containing entity information for reverse anonymization
     """
     # Check if RAG functionality is available
     if not RAG_AVAILABLE:
@@ -595,6 +601,12 @@ def create_vector_db_from_text(text, title, api_key):
             'length': len(text),
             'chunks': len(texts)
         }
+        
+        # Store entity information if provided
+        if entities and isinstance(entities, dict):
+            # Ensure entities have the expected structure
+            if "Text" in entities and "Replacement" in entities and "Category" in entities:
+                document_metadata[document_hash]['entities'] = entities
         
         # Save updated metadata
         save_document_metadata(persist_directory, document_metadata)
@@ -960,4 +972,129 @@ def delete_document_from_vector_db(document_hash):
         
     except Exception as e:
         st.error(f"Error deleting document: {e}")
+        return False
+
+def get_document_content_from_hash(document_hash, api_key=None):
+    """
+    Retrieve the original document content from the vector database using a document hash.
+    
+    Args:
+        document_hash: The hash of the document to retrieve
+        api_key: Optional OpenAI API key if needed for authentication
+        
+    Returns:
+        tuple: (document_content, document_title, entities_data) or (None, None, None) if not found
+    """
+    # Check if RAG functionality is available
+    if not RAG_AVAILABLE:
+        st.error("RAG functionality is not available. Please install the required dependencies.")
+        return None, None, None
+    
+    # Persistent directory configuration
+    persist_directory = './chroma_db'
+    
+    # Load document metadata
+    document_metadata = load_document_metadata(persist_directory)
+    
+    # Check if document exists in metadata
+    if document_hash not in document_metadata:
+        return None, None, None
+    
+    # Get document title
+    document_title = document_metadata[document_hash].get('title', 'Untitled Document')
+    
+    # Get entities data if available
+    entities_data = document_metadata[document_hash].get('entities', {
+        "Text": [],
+        "Replacement": [],
+        "Category": []
+    })
+    
+    # Create embedding function if API key provided
+    embedding_function = None
+    if api_key:
+        embedding_function = OpenAIEmbeddingFunction(api_key=api_key)
+    
+    try:
+        # Connect to ChromaDB
+        chroma_client = chromadb.PersistentClient(
+            path=persist_directory,
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True
+            )
+        )
+        
+        # Get collection
+        collection_params = {"name": "document_collection"}
+        if embedding_function:
+            collection_params["embedding_function"] = embedding_function
+            
+        collection = chroma_client.get_collection(**collection_params)
+        
+        # Get all chunks for this document
+        all_ids = collection.get(include=[])["ids"]
+        matching_ids = [doc_id for doc_id in all_ids if document_hash in doc_id]
+        
+        if not matching_ids:
+            return None, document_title, entities_data
+        
+        # Get all chunks
+        result = collection.get(ids=matching_ids, include=["documents", "metadatas"])
+        
+        # Sort chunks by chunk_id if available
+        sorted_chunks = []
+        for i, doc_id in enumerate(result["ids"]):
+            chunk_id = result["metadatas"][i].get("chunk_id", i)
+            sorted_chunks.append((chunk_id, result["documents"][i]))
+        
+        sorted_chunks.sort(key=lambda x: x[0])
+        
+        # Combine chunks into a single document
+        document_content = " ".join([chunk[1] for chunk in sorted_chunks])
+        
+        return document_content, document_title, entities_data
+        
+    except Exception as e:
+        st.error(f"Error retrieving document content: {e}")
+        return None, document_title, entities_data
+
+def update_document_entities(document_hash, entities):
+    """
+    Update the entity information for a specific document in the metadata.
+    
+    Args:
+        document_hash: The hash of the document to update
+        entities: Dictionary containing entity information
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    # Check if RAG functionality is available
+    if not RAG_AVAILABLE:
+        st.error("RAG functionality is not available.")
+        return False
+    
+    # Persistent directory configuration
+    persist_directory = './chroma_db'
+    
+    try:
+        # Load document metadata
+        document_metadata = load_document_metadata(persist_directory)
+        
+        # Check if document exists in metadata
+        if document_hash not in document_metadata:
+            st.warning(f"Document with hash {document_hash} not found in metadata.")
+            return False
+        
+        # Update entities in metadata
+        document_metadata[document_hash]['entities'] = entities
+        
+        # Save updated metadata
+        save_document_metadata(persist_directory, document_metadata)
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"Error updating document entities: {e}")
         return False
