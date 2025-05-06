@@ -135,7 +135,7 @@ def del_dialog(string):
             icon = ":date:"
             page = "pages/01_convert.py"
         case "saved_content":
-            name = "Extracted Content"
+            name = "Extracted Raw"
             icon = ":page_with_curl:"
             page = "pages/02_extract.py"
         case "saved_anonymisation":
@@ -157,7 +157,7 @@ def sidebar():
     st.sidebar.header(":book: Reporting Tools",divider=True)
     st.sidebar.page_link(page="pages/00_home.py",label="Home",icon=":material/home:")
     st.sidebar.page_link(page="pages/01_convert.py",label="Convert Transcripts",icon=":material/table:")
-    st.sidebar.page_link(page="pages/02_extract.py",label="Extract Content",icon=":material/chat:")
+    st.sidebar.page_link(page="pages/02_extract.py",label="Extract Raw",icon=":material/chat:")
     st.sidebar.page_link(page="pages/03_anonymize.py",label="Anonymize Content",icon=":material/sms:")
     st.sidebar.page_link(page="pages/04_chatgpt.py",label="ChatGPT Tool",icon=":material/hexagon:")
     st.sidebar.page_link(page="pages/05_revert.py",label="Reverse Anonymization",icon=":material/comment:")
@@ -169,7 +169,7 @@ def sidebar():
             if st.sidebar.button(label=f":wastebasket: {st.session_state["saved_convert"]["Title"][:18]}...",type="secondary",key="del_button01",use_container_width=True):
                 del_dialog("saved_convert")
         if "saved_content" in st.session_state:
-            st.sidebar.write(":page_with_curl: **Extracted Content**")
+            st.sidebar.write(":page_with_curl: **Extracted Raw**")
             if st.sidebar.button(label=f":wastebasket: {st.session_state["saved_content"]["Title"][:18]}...",type="secondary",key="del_button02",use_container_width=True):
                 del_dialog("saved_content")
         if "saved_anonymisation" in st.session_state:
@@ -184,7 +184,7 @@ def steps(i):
     sac.steps(
         items=[
             sac.StepsItem(title='Convert Transcripts', subtitle='from raw', description='To CSV table', disabled=True),
-            sac.StepsItem(title='Extract Content', subtitle='from csv', description='To DOCX document', disabled=True),
+            sac.StepsItem(title='Extract Raw', subtitle='from csv', description='To DOCX document', disabled=True),
             sac.StepsItem(title='Anonymize', subtitle='by categories', description='To Hide Entities', disabled=True),
             sac.StepsItem(title='ChatGPT Tool', subtitle='for asking', description='To Summarize', disabled=True),
             sac.StepsItem(title='Reverse Anonymization', subtitle='from data', description='To DOCX document', disabled=True),

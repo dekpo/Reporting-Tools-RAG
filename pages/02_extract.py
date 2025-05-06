@@ -25,7 +25,7 @@ lib.steps(1)
 
 st.divider()
 
-st.header("Extract Content")
+st.header("Extract Raw Content")
 
 st.markdown("<p>Extract paragraphs from a <b>CSV file</b> or from <b>Your Previous Backup</b> using this tool, getting raw contents.<br>As the names of the attendees may appear in the transcripts, it is possible to <b>hide them at this stage</b>.",unsafe_allow_html=True)
 
