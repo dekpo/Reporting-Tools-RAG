@@ -340,6 +340,31 @@ else:
             for doc_hash in document_metadata:
                 document_metadata[doc_hash]['active'] = doc_hash in selected_docs
             lib.save_document_metadata(persist_directory, document_metadata)
+            
+            # Add Clear Vector Database button at the end of document list
+            st.divider()
+            if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
+                col_left, col_right = st.columns([0.7, 0.3])
+                with col_right:
+                    if st.button("Clear All Documents", type="secondary", use_container_width=True):
+                        with st.spinner("Clearing vector database..."):
+                            success = lib.clear_vector_database()
+                            if success:
+                                st.success("Vector database cleared successfully!")
+                                # Also clear the vector_db from session state
+                                if "vector_db" in st.session_state:
+                                    del st.session_state["vector_db"]
+                                if "selected_doc_sources" in st.session_state:
+                                    del st.session_state["selected_doc_sources"]
+                                if "processed_anonymizations" in st.session_state:
+                                    del st.session_state["processed_anonymizations"]
+                                st.rerun()
+                            else:
+                                st.error("Failed to clear vector database. If you're seeing a file access error, this could be due to Windows file locks. Try restarting the application.")
+                                if st.button("Restart Application", key="restart_app_button"):
+                                    st.rerun()
+                with col_left:
+                    st.warning("This will remove all documents from the database. This action cannot be undone.", icon="⚠️")
         else:
             st.info("No documents found in the database. Process a document to add it to the sources.")
         st.divider()
@@ -689,8 +714,8 @@ else:
                 del st.session_state["vector_db"]
             st.rerun()
         
-        # Clear Vector Database button
-        if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
+        # Clear Vector Database button - Moved to Document Sources section
+        if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE and False:  # Disabled here
             # Only show this button if RAG is available
             if st.button("Clear Vector Database", type="secondary", use_container_width=True):
                 with st.spinner("Clearing vector database..."):
@@ -710,7 +735,8 @@ else:
                         if st.button("Restart Application", key="restart_app_button"):
                             st.rerun()
         else:
-            st.info("RAG functionality not available.")
+            if not hasattr(lib, 'RAG_AVAILABLE') or not lib.RAG_AVAILABLE:
+                st.info("RAG functionality not available.")
         
         # Add a debug toggle (hidden behind a "secret" checkbox)
         if st.checkbox("Enable debug mode", key="debug_toggle", value=False):
