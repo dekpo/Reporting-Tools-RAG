@@ -24,8 +24,8 @@ st.title(lib.APP_TITLE)
 
 st.divider()
 
-# Steps
-lib.steps(3)
+# Steps - updated to show position 2 in the new 4-step process
+lib.steps(1)
 
 st.divider()
 

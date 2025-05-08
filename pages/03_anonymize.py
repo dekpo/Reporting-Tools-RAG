@@ -23,8 +23,8 @@ st.title(lib.APP_TITLE)
 
 st.divider()
 
-# Steps
-lib.steps(2)
+# Steps - updated to show position 1 in the new 4-step process
+lib.steps(0)
 
 st.divider()
 
@@ -63,44 +63,19 @@ for label in nlp.pipe_labels['ner']:
 st.subheader("Choose entity categories")
 st.write(f'**{len(pipe_labels["Label"])} categories** of entities to anonymize.')
 
-edited_labels = st.data_editor(pipe_labels,disabled=["Label","Description"],use_container_width=True )
+edited_labels = st.data_editor(pipe_labels,disabled=["Label","Description"],use_container_width=True)
 
 
 text_area = ""
 if "saved_content" not in st.session_state:
-
-    st.subheader("Do You Want To Anonymize Free Text ?")
-    default_title = "Your Subject"
-    title_input = st.text_input("**Subject*** (mandatory)",default_title,help="What is the title item of the content you want to anonymize?")
-    text_value = ""
-
-    upload_docx = st.file_uploader("**Upload a DOCX file**",type=["docx"],accept_multiple_files=False,help=f"You can upload a DOCX file with long text")
-    if upload_docx is not None:
-        with st.spinner('Extracting content from DOCX file... Please Wait.'):
-            text_value = docx2txt.process(upload_docx)
-            time.sleep(1)
-
-    upload_pdf = st.file_uploader("**Or upload a PDF file**",type=["pdf"],accept_multiple_files=False,help=f"You can upload a PDF file with long text")
-    if upload_pdf is not None:
-        with st.spinner('Extracting content from PDF file... Please Wait.'):
-            pdf_reader = PdfReader(upload_pdf)
-            for page in pdf_reader.pages:
-                text_value+= page.extract_text()
-            time.sleep(1)
-
-    text_area = st.text_area("**Or simply paste Your Free Text Here**", help="As you have no summary in your backups you can anonymize free text.",height=400,value=text_value)
-    st.button("Anonymize This Free Text",type="primary", key="anonymize_free_text")
-    
-
-if ("saved_content" in st.session_state or len(text_area)>0):
+    st.info("Please upload your document on the home page first.")
+    st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
+else:
     with st.spinner('Analysing content... Please Wait.'):
          time.sleep(3)
-    if "saved_content" not in st.session_state:
-        title = title_input if title_input else default_title
-        txt = ''.join(c for c in text_area if lib.valid_xml_char_ordinal(c))
-    else:
-        title = st.session_state["saved_content"]["Title"]
-        txt = st.session_state["saved_content"]["Data"]
+    
+    title = st.session_state["saved_content"]["Title"]
+    txt = st.session_state["saved_content"]["Data"]
 
     parags = txt.split("\n")
     

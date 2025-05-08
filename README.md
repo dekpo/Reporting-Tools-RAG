@@ -1,17 +1,15 @@
 # DTN Reporting Tools
-A Python app to convert transcripts, extract contents and anonymize them to ask ChatGPT for processing summaries and insights.
+A Python app to convert transcripts, anonymize content and ask ChatGPT for processing summaries and insights.
 
 ## Overview
 This application provides a streamlined workflow for processing meeting transcripts:
-1. **Convert** - Transform raw transcripts (.docx or .vtt) into structured data
-2. **Extract** - Pull out relevant content from the structured data
-3. **Anonymize** - Replace sensitive information with generic placeholders
-4. **ChatGPT** - Use AI to analyze and summarize the anonymized content
-5. **Revert** - Convert anonymized content back to its original form
+1. **Upload & Extract** - Upload and convert files (.docx, .vtt, .pdf) into text content
+2. **Anonymize** - Replace sensitive information with generic placeholders
+3. **ChatGPT** - Use AI to analyze and summarize the anonymized content
+4. **Revert** - Convert anonymized content back to its original form
 
 ## Features
-- **Transcript Conversion**: Support for Teams/Zoom .vtt files and Teams .docx files
-- **Content Extraction**: Extract and organize meeting content by topic, item, and segment
+- **File Support**: Support for Teams/Zoom .vtt files, Teams .docx files, regular .docx documents, and PDF files
 - **Anonymization**: Automatically detect and replace sensitive entities (names, organizations, etc.)
 - **RAG Integration**: Uses Retrieval-Augmented Generation for more accurate AI responses
 - **Vector Database**: Store and retrieve documents using ChromaDB for semantic search
@@ -38,11 +36,10 @@ $ streamlit run app.py
 - Spacy model (en_core_web_md)
 
 ## Workflow
-1. **Convert Transcripts**: Upload a .vtt or .docx file, provide meeting information
-2. **Extract Content**: Organize and clean the transcript data
-3. **Anonymize Content**: Automatically detect and replace sensitive entities
-4. **ChatGPT Tool**: Ask questions about the anonymized content using RAG
-5. **Reverse Anonymization**: Convert anonymized responses back to original form
+1. **Upload & Extract**: Upload a file (.vtt, .docx, .pdf) or paste text directly
+2. **Anonymize Content**: Automatically detect and replace sensitive entities
+3. **ChatGPT Tool**: Ask questions about the anonymized content using RAG
+4. **Reverse Anonymization**: Convert anonymized responses back to original form
 
 ## Dependencies
 - streamlit - Web application framework

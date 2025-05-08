@@ -23,7 +23,7 @@ st.title(lib.APP_TITLE)
 st.divider()
 
 # Steps
-lib.steps(4)
+lib.steps(2)
 
 st.divider()
 

@@ -63,14 +63,6 @@ def app_config():
     # Check for cleanup requests at startup
     check_cleanup_requests()
 
-def save_convert(title,data,inputs):
-    st.session_state["saved_convert"] = {
-        "Time": current_datetime,
-        "Title": title,
-        "Data": data,
-        "Inputs": inputs
-    }
-
 def save_content(title,content,attendees):
     st.session_state["saved_content"] = {
         "Time": current_datetime,
@@ -130,18 +122,18 @@ def del_dialog(string):
     title = item["Title"]
     date = item["Time"]
     match string:
-        case "saved_convert":
-            name = "Converted Transcripts"
-            icon = ":date:"
-            page = "pages/01_convert.py"
         case "saved_content":
-            name = "Extracted Raw"
+            name = "Extracted Content"
             icon = ":page_with_curl:"
-            page = "pages/02_extract.py"
+            page = "pages/00_home.py"
         case "saved_anonymisation":
             name = "Anonymized Content"
             icon = ":speech_balloon:"
-            page = "pages/03_anonymize.py"   
+            page = "pages/03_anonymize.py"
+        case "saved_gpt_answers":
+            name = "ChatGPT Answers"
+            icon = ":robot_face:"
+            page = "pages/04_chatgpt.py"
     st.write(f"Do you really want to delete this **{name}**?")
     st.write(f"{icon} **{title}** (Saved: {date})")
     col1, col2 = st.columns(2)
@@ -156,26 +148,24 @@ def del_dialog(string):
 def sidebar():
     st.sidebar.header(":book: Reporting Tools",divider=True)
     st.sidebar.page_link(page="pages/00_home.py",label="Home",icon=":material/home:")
-    st.sidebar.page_link(page="pages/01_convert.py",label="Convert Transcripts",icon=":material/table:")
-    st.sidebar.page_link(page="pages/02_extract.py",label="Extract Raw",icon=":material/chat:")
     st.sidebar.page_link(page="pages/03_anonymize.py",label="Anonymize Content",icon=":material/sms:")
     st.sidebar.page_link(page="pages/04_chatgpt.py",label="ChatGPT Tool",icon=":material/hexagon:")
     st.sidebar.page_link(page="pages/05_revert.py",label="Reverse Anonymization",icon=":material/comment:")
 
-    if "saved_convert" in st.session_state or "saved_content" in st.session_state or "saved_anonymisation" in st.session_state:
+    if "saved_content" in st.session_state or "saved_anonymisation" in st.session_state or "saved_gpt_answers" in st.session_state:
         st.sidebar.header(":floppy_disk: Your Backup",divider=True)
-        if "saved_convert" in st.session_state:
-            st.sidebar.write(":date: **Converted Transcripts**")
-            if st.sidebar.button(label=f":wastebasket: {st.session_state["saved_convert"]["Title"][:18]}...",type="secondary",key="del_button01",use_container_width=True):
-                del_dialog("saved_convert")
         if "saved_content" in st.session_state:
-            st.sidebar.write(":page_with_curl: **Extracted Raw**")
-            if st.sidebar.button(label=f":wastebasket: {st.session_state["saved_content"]["Title"][:18]}...",type="secondary",key="del_button02",use_container_width=True):
+            st.sidebar.write(":page_with_curl: **Extracted Content**")
+            if st.sidebar.button(label=f":wastebasket: {st.session_state['saved_content']['Title'][:18]}...",type="secondary",key="del_button02",use_container_width=True):
                 del_dialog("saved_content")
         if "saved_anonymisation" in st.session_state:
             st.sidebar.write(":speech_balloon: **Anonymized Content**")
-            if st.sidebar.button(label=f":wastebasket: {st.session_state["saved_anonymisation"]["Title"][:18]}...",type="secondary",key="del_button03",use_container_width=True):
+            if st.sidebar.button(label=f":wastebasket: {st.session_state['saved_anonymisation']['Title'][:18]}...",type="secondary",key="del_button03",use_container_width=True):
                 del_dialog("saved_anonymisation")
+        if "saved_gpt_answers" in st.session_state:
+            st.sidebar.write(":robot_face: **ChatGPT Answers**")
+            if st.sidebar.button(label=f":wastebasket: {st.session_state['saved_gpt_answers']['Title'][:18]}...",type="secondary",key="del_button04",use_container_width=True):
+                del_dialog("saved_gpt_answers")
     
     st.sidebar.divider()
     st.sidebar.text(f"Release Version {APP_VERSION}")
@@ -183,8 +173,7 @@ def sidebar():
 def steps(i):
     sac.steps(
         items=[
-            sac.StepsItem(title='Convert Transcripts', subtitle='from raw', description='To CSV table', disabled=True),
-            sac.StepsItem(title='Extract Raw', subtitle='from csv', description='To DOCX document', disabled=True),
+            sac.StepsItem(title='Upload & Extract', subtitle='from file', description='To Raw Text', disabled=True),
             sac.StepsItem(title='Anonymize', subtitle='by categories', description='To Hide Entities', disabled=True),
             sac.StepsItem(title='ChatGPT Tool', subtitle='for asking', description='To Summarize', disabled=True),
             sac.StepsItem(title='Reverse Anonymization', subtitle='from data', description='To DOCX document', disabled=True),
