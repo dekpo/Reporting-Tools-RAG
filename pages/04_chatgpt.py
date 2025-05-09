@@ -247,7 +247,43 @@ else:
             del st.session_state["processed_anonymizations"]
         st.rerun()
 
-    # Document Source Selection - Moved above the chat interface
+    # Add a section for advanced settings - MOVED TO TOP
+    st.divider()
+    st.subheader("Advanced Settings")
+    
+    # Display current model and provide model information
+    st.info(f"Current model: **{st.session_state['openai_model']}**")
+    
+    # Add model information based on the selected model
+    model_info = {
+        "gpt-4o": "Latest and most capable model, optimized for performance and cost-effectiveness.",
+        "gpt-4-turbo": "Powerful model with strong reasoning capabilities and knowledge up to Apr 2023.",
+        "gpt-4": "Original GPT-4 model with high accuracy and reasoning capabilities.",
+        "gpt-3.5-turbo": "Fast and cost-effective model for most general tasks. 16K context window."
+    }
+    
+    if st.session_state["openai_model"] in model_info:
+        st.caption(model_info[st.session_state["openai_model"]])
+    
+    # Model rate information
+    st.caption("**Note:** Different models have different pricing. Check [OpenAI pricing](https://openai.com/pricing) for details.")
+    
+    # Add a button to reset API key and change model
+    if st.button("Change AI Model", use_container_width=True):
+        del st.session_state["gpt_api_key"]
+        del st.session_state["openai_model"]
+        # Clear vector DB session state if it exists
+        if "vector_db" in st.session_state:
+            del st.session_state["vector_db"]
+        st.rerun()
+    
+    # Add a debug toggle (hidden behind a "secret" checkbox)
+    if st.checkbox("Enable debug mode", key="debug_toggle", value=False):
+        st.session_state.show_debug = True
+    else:
+        st.session_state.show_debug = False
+
+    # Document Source Selection - Moved below Advanced Settings
     if "vector_db" in st.session_state and st.session_state.vector_db is not None:
         st.divider()
         st.subheader("Document Sources")
@@ -369,6 +405,8 @@ else:
             st.info("No documents found in the database. Process a document to add it to the sources.")
         st.divider()
 
+    # CONVERSATION SECTION - Proper placement for Streamlit chat
+    st.subheader("Chat with your document(s)")
     st.markdown("<p>Ask questions about your anonymized content. The AI will provide relevant answers based on the context of your document(s).</p>",unsafe_allow_html=True)
 
     client = OpenAI(api_key=st.session_state["gpt_api_key"])
@@ -445,15 +483,6 @@ else:
                             # Set vector_db to None to indicate RAG is not available
                             st.session_state.vector_db = None
 
-    # Display chat header and existing messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Create a container for document processing messages
-    header = st.container()
-    # header.write(f"<div class='fixed-header'/>",unsafe_allow_html=True)
-
     # Show a warning if no document is loaded AND no vector DB is available
     if "saved_anonymisation" not in st.session_state and ("vector_db" not in st.session_state or st.session_state.vector_db is None):
         st.warning("No document loaded. Please go to the Anonymize page to process a document first.")
@@ -468,197 +497,214 @@ else:
             # Check if we're using a previously stored document without its content
             if "saved_anonymisation" in st.session_state and ("Data" not in st.session_state["saved_anonymisation"] or not st.session_state["saved_anonymisation"].get("Data")):
                 st.info("You're viewing previously stored document sources. You can ask questions about these documents from previous sessions.")
+
+    # Chat input for user questions - AT THE BOTTOM as per Streamlit chat pattern
+    if prompt := st.chat_input("Ask a question about your document", max_chars=8000):
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # Chat input for user questions
-        if prompt := st.chat_input("Ask a question about your document", max_chars=8000):
-            # Add user message to chat history
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            
-            # Display user message
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            
-            # Generate response using RAG
-            with st.chat_message("assistant"):
-                try:
-                    with st.spinner("Searching document and generating response..."):
-                        # Check if we can use RAG approach
-                        if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE and st.session_state.vector_db is not None:
-                            # Query the vector database
-                            context_docs, context_metadatas = lib.query_vector_db(
-                                st.session_state.vector_db, 
-                                prompt,
-                                n_results=5,
-                                selected_doc_sources=st.session_state.get("selected_doc_sources", [])
-                            )
-                            
-                            # Log debugging information
-                            st.session_state["last_query_debug"] = {
-                                "query": prompt,
-                                "found_contexts": len(context_docs),
-                                "selected_sources": st.session_state.get("selected_doc_sources", [])
-                            }
-                            
-                            if not context_docs:
-                                # No relevant context found
-                                response = "I couldn't find relevant information in the document to answer your question. Please try rephrasing your question or ask something else about the document content."
-                                st.markdown(response)
-                                st.session_state.messages.append({"role": "assistant", "content": response})
-                            else:
-                                # Debug info in dev environment
-                                if "show_debug" in st.session_state and st.session_state.show_debug:
-                                    with st.expander("Debug Information (Admin only)"):
-                                        st.write(f"Found {len(context_docs)} context chunks")
-                                        st.write("First few words of each chunk:")
-                                        for i, doc in enumerate(context_docs[:3]):
-                                            st.write(f"{i+1}. {doc[:50]}...")
-                                
-                                # Stream the response for a better user experience
-                                stream = client.chat.completions.create(
-                                    model=st.session_state["openai_model"],
-                                    messages=[
-                                        {"role": "system", "content": "You are a helpful assistant providing information based on the supplied document context. Answer questions accurately using ONLY information from the provided context. When referencing information, mention which document source it came from. If multiple documents contain relevant information, clearly indicate which source each piece of information came from. If the context doesn't contain information to answer the question, admit you don't know rather than making up an answer."},
-                                        {"role": "user", "content": f"Context from {len(context_docs)} document chunks:\n\n{' '.join(context_docs)}\n\nSource metadata:\n{context_metadatas}\n\nUser Question: {prompt}\n\nImportant: Base your answer ONLY on the provided context. Cite document sources when possible."}
-                                    ],
-                                    stream=True,
-                                )
-                                
-                                # Display streaming response
-                                response = st.write_stream(stream)
-                                
-                                # Add a section showing the sources used
-                                if context_metadatas:
-                                    with st.expander("View document sources used"):
-                                        sources_used = {}
-                                        for metadata in context_metadatas:
-                                            if "source" in metadata:
-                                                source = metadata["source"]
-                                                if source not in sources_used:
-                                                    sources_used[source] = 0
-                                                sources_used[source] += 1
-                                        
-                                        st.markdown("### Document sources used in this response:")
-                                        for source, count in sorted(sources_used.items()):
-                                            st.markdown(f"- **{source}** ({count} chunks)")
-                                        
-                                        if st.session_state.show_debug:
-                                            st.divider()
-                                            st.write("### Query Debug Info")
-                                            if "last_query_debug" in st.session_state:
-                                                debug = st.session_state["last_query_debug"]
-                                                st.write(f"Query: '{debug['query']}'")
-                                                st.write(f"Total chunks found: {debug['found_contexts']}")
-                                                st.write(f"Selected sources: {', '.join(debug['selected_sources']) if debug['selected_sources'] else 'All sources'}")
-                                
-                                # Add assistant response to chat history
-                                st.session_state.messages.append({"role": "assistant", "content": response})
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Generate response using RAG
+        with st.chat_message("assistant"):
+            try:
+                with st.spinner("Searching document and generating response..."):
+                    # Check if we can use RAG approach
+                    if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE and st.session_state.vector_db is not None:
+                        # Query the vector database
+                        context_docs, context_metadatas = lib.query_vector_db(
+                            st.session_state.vector_db, 
+                            prompt,
+                            n_results=5,
+                            selected_doc_sources=st.session_state.get("selected_doc_sources", [])
+                        )
+                        
+                        # Log debugging information
+                        st.session_state["last_query_debug"] = {
+                            "query": prompt,
+                            "found_contexts": len(context_docs),
+                            "selected_sources": st.session_state.get("selected_doc_sources", [])
+                        }
+                        
+                        if not context_docs:
+                            # No relevant context found
+                            response = "I couldn't find relevant information in the document to answer your question. Please try rephrasing your question or ask something else about the document content."
+                            st.markdown(response)
+                            st.session_state.messages.append({"role": "assistant", "content": response})
                         else:
-                            # Fallback to traditional approach when RAG is not available
-                            # Stream the response for a better user experience
-                            # Create messages list with system message and all existing messages
-                            messages = [
-                                {"role": "system", "content": "You are a helpful assistant. Answer questions based on your knowledge."}
-                            ]
-                            # Add all previous messages
-                            messages.extend([
-                                {"role": m["role"], "content": m["content"]} 
-                                for m in st.session_state.messages
-                            ])
+                            # Debug info in dev environment
+                            if "show_debug" in st.session_state and st.session_state.show_debug:
+                                with st.expander("Debug Information (Admin only)"):
+                                    st.write(f"Found {len(context_docs)} context chunks")
+                                    st.write("First few words of each chunk:")
+                                    for i, doc in enumerate(context_docs[:3]):
+                                        st.write(f"{i+1}. {doc[:50]}...")
                             
-                            # Create streaming response
+                            # Stream the response for a better user experience
                             stream = client.chat.completions.create(
                                 model=st.session_state["openai_model"],
-                                messages=messages,
+                                messages=[
+                                    {"role": "system", "content": "You are a helpful assistant providing information based on the supplied document context. Answer questions accurately using ONLY information from the provided context. When referencing information, mention which document source it came from. If multiple documents contain relevant information, clearly indicate which source each piece of information came from. If the context doesn't contain information to answer the question, admit you don't know rather than making up an answer."},
+                                    {"role": "user", "content": f"Context from {len(context_docs)} document chunks:\n\n{' '.join(context_docs)}\n\nSource metadata:\n{context_metadatas}\n\nUser Question: {prompt}\n\nImportant: Base your answer ONLY on the provided context. Cite document sources when possible."}
+                                ],
                                 stream=True,
                             )
                             
                             # Display streaming response
                             response = st.write_stream(stream)
                             
+                            # Add a section showing the sources used
+                            if context_metadatas:
+                                with st.expander("View document sources used"):
+                                    sources_used = {}
+                                    for metadata in context_metadatas:
+                                        if "source" in metadata:
+                                            source = metadata["source"]
+                                            if source not in sources_used:
+                                                sources_used[source] = 0
+                                            sources_used[source] += 1
+                                    
+                                    st.markdown("### Document sources used in this response:")
+                                    for source, count in sorted(sources_used.items()):
+                                        st.markdown(f"- **{source}** ({count} chunks)")
+                                    
+                                    if st.session_state.show_debug:
+                                        st.divider()
+                                        st.write("### Query Debug Info")
+                                        if "last_query_debug" in st.session_state:
+                                            debug = st.session_state["last_query_debug"]
+                                            st.write(f"Query: '{debug['query']}'")
+                                            st.write(f"Total chunks found: {debug['found_contexts']}")
+                                            st.write(f"Selected sources: {', '.join(debug['selected_sources']) if debug['selected_sources'] else 'All sources'}")
+                            
                             # Add assistant response to chat history
                             st.session_state.messages.append({"role": "assistant", "content": response})
-                            
-                except openai.APIConnectionError as e:
-                    error = "Sorry, the server could not be reached. Please try again later..."
-                    st.error(error)
-                    st.session_state.messages.append({"role": "assistant", "content": error})
-                    
-                except openai.RateLimitError as e:
-                    error = "Too many requests. Please try again later..."
-                    st.error(error)
-                    st.session_state.messages.append({"role": "assistant", "content": error})
-                    
-                except openai.APIStatusError as e:
-                    error = "An error occurred while processing your request. Please try again later..."
-                    st.error(error)
-                    st.session_state.messages.append({"role": "assistant", "content": error})
-                    
-                except Exception as e:
-                    error = f"An unexpected error occurred: {str(e)}"
-                    st.error(error)
-                    st.session_state.messages.append({"role": "assistant", "content": error})
-
-    # Document management interface
-    if "saved_anonymisation" in st.session_state:
+                    else:
+                        # Fallback to traditional approach when RAG is not available
+                        # Stream the response for a better user experience
+                        # Create messages list with system message and all existing messages
+                        messages = [
+                            {"role": "system", "content": "You are a helpful assistant. Answer questions based on your knowledge."}
+                        ]
+                        # Add all previous messages
+                        messages.extend([
+                            {"role": m["role"], "content": m["content"]} 
+                            for m in st.session_state.messages
+                        ])
+                        
+                        # Create streaming response
+                        stream = client.chat.completions.create(
+                            model=st.session_state["openai_model"],
+                            messages=messages,
+                            stream=True,
+                        )
+                        
+                        # Display streaming response
+                        response = st.write_stream(stream)
+                        
+                        # Add assistant response to chat history
+                        st.session_state.messages.append({"role": "assistant", "content": response})
+                        
+            except openai.APIConnectionError as e:
+                error = "Sorry, the server could not be reached. Please try again later..."
+                st.error(error)
+                st.session_state.messages.append({"role": "assistant", "content": error})
+                
+            except openai.RateLimitError as e:
+                error = "Too many requests. Please try again later..."
+                st.error(error)
+                st.session_state.messages.append({"role": "assistant", "content": error})
+                
+            except openai.APIStatusError as e:
+                error = "An error occurred while processing your request. Please try again later..."
+                st.error(error)
+                st.session_state.messages.append({"role": "assistant", "content": error})
+                
+            except Exception as e:
+                error = f"An unexpected error occurred: {str(e)}"
+                st.error(error)
+                st.session_state.messages.append({"role": "assistant", "content": error})
+                
+        # IMPORTANT: Display Conversation Management buttons after every new response
+        # This ensures they're always at the bottom after a new AI response
+        st.rerun()  # Force a rerun to ensure proper rendering and scrolling
+    
+    # Display chat messages from history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Document management interface - ALWAYS PLACED AT THE END
+    # Debug info to check why buttons might not be showing
+    if st.session_state.show_debug:
+        st.write(f"Debug - saved_anonymisation exists: {'saved_anonymisation' in st.session_state}")
+        st.write(f"Debug - message count: {len(st.session_state.messages)}")
+    
+    # Modified condition to ensure buttons appear when there are messages
+    if len(st.session_state.messages) > 0:
         st.divider()
         st.subheader("Conversation Management")
         
-        col1, col2, col3 = st.columns(3)
+        # Use 4 columns for more compact buttons
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         
         with col1:
-            # Download answers as DOCX
-            if len(st.session_state.messages) > 0:
-                doc_download = Document()
+            # Download answers as DOCX - More compact button
+            doc_download = Document()
+            if "saved_anonymisation" in st.session_state:
                 doc_title = st.session_state["saved_anonymisation"]["Title"].replace(">"," ")
-                doc_download.add_heading(doc_title, level=1)
-                
-                # Add conversation to document
-                for message in st.session_state.messages:
-                    if message["role"] == "user":
-                        doc_download.add_heading(f"Question: {message['content']}", level=2)
-                    else:
-                        doc_download.add_paragraph(message["content"])
-                
-                # Save document to buffer
-                bio = io.BytesIO()
-                doc_download.save(bio)
-                
-                # Download button
-                st.download_button(
-                    label="Download Conversation As DOCX File",
-                    type="secondary",
-                    data=bio.getvalue(),
-                    file_name=f"ChatGPT Answers About {doc_title}.docx",
-                    mime="docx",
-                    key="download_conversation_btn",
-                    use_container_width=True
-                )
+            else:
+                doc_title = "Chat Conversation"
+            doc_download.add_heading(doc_title, level=1)
+            
+            # Add conversation to document
+            for message in st.session_state.messages:
+                if message["role"] == "user":
+                    doc_download.add_heading(f"Question: {message['content']}", level=2)
+                else:
+                    doc_download.add_paragraph(message["content"])
+            
+            # Save document to buffer
+            bio = io.BytesIO()
+            doc_download.save(bio)
+            
+            # Download button - More compact
+            st.download_button(
+                label="Download DOCX",
+                type="secondary",
+                data=bio.getvalue(),
+                file_name=f"ChatGPT Answers About {doc_title}.docx",
+                mime="docx",
+                key="download_conversation_btn",
+                use_container_width=True
+            )
         
         with col2:
-            # Copy answers to clipboard
-            if len(st.session_state.messages) > 0:
-                if st.button("Copy Conversation To Clipboard", use_container_width=True):
-                    # Format conversation for clipboard
-                    conversation_text = ""
-                    for message in st.session_state.messages:
-                        if message["role"] == "user":
-                            conversation_text += f"Question: {message['content']}\n\n"
-                        else:
-                            conversation_text += f"Answer: {message['content']}\n\n"
-                    
-                    # Copy to clipboard
-                    pyperclip.copy(conversation_text)
-                    st.success("Conversation Copied!")
-            
-            # Clear conversation
-            if len(st.session_state.messages) > 0:
-                if st.button("Clear Conversation", use_container_width=True):
-                    st.session_state.messages = []
-                    st.rerun()
+            # Copy answers to clipboard - More compact
+            if st.button("Copy", use_container_width=True):
+                # Format conversation for clipboard
+                conversation_text = ""
+                for message in st.session_state.messages:
+                    if message["role"] == "user":
+                        conversation_text += f"Question: {message['content']}\n\n"
+                    else:
+                        conversation_text += f"Answer: {message['content']}\n\n"
+                
+                # Copy to clipboard
+                pyperclip.copy(conversation_text)
+                st.success("Copied!")
         
         with col3:
-            # Save and proceed to reverse anonymization
-            if len(st.session_state.messages) > 0:
+            # Clear conversation - More compact
+            if st.button("Clear Chat", use_container_width=True):
+                st.session_state.messages = []
+                st.rerun()
+        
+        with col4:
+            # Save and proceed to reverse anonymization - More compact
+            if "saved_anonymisation" in st.session_state:
                 entities = st.session_state["saved_anonymisation"]["Entities"]
                 if "saved_content" in st.session_state:
                     attendees = st.session_state["saved_content"]["Attendees"]
@@ -673,9 +719,9 @@ else:
                     else:
                         conversation_text += f"Answer: {message['content']}\n\n"
                 
-                # Save button
+                # Save button - More compact
                 if st.button(
-                    label="**Save Conversation And >> Reverse Anonymization**",
+                    label="Save & Reverse",
                     type="primary",
                     use_container_width=True,
                     key="save_conversation",
@@ -683,63 +729,13 @@ else:
                     args=[st.session_state["saved_anonymisation"]["Title"], conversation_text, entities, attendees]
                 ):
                     st.switch_page("pages/05_revert.py")
-        
-        # Add a section for advanced settings
-        st.divider()
-        st.subheader("Advanced Settings")
-        
-        # Display current model and provide model information
-        st.info(f"Current model: **{st.session_state['openai_model']}**")
-        
-        # Add model information based on the selected model
-        model_info = {
-            "gpt-4o": "Latest and most capable model, optimized for performance and cost-effectiveness.",
-            "gpt-4-turbo": "Powerful model with strong reasoning capabilities and knowledge up to Apr 2023.",
-            "gpt-4": "Original GPT-4 model with high accuracy and reasoning capabilities.",
-            "gpt-3.5-turbo": "Fast and cost-effective model for most general tasks. 16K context window."
-        }
-        
-        if st.session_state["openai_model"] in model_info:
-            st.caption(model_info[st.session_state["openai_model"]])
-        
-        # Model rate information
-        st.caption("**Note:** Different models have different pricing. Check [OpenAI pricing](https://openai.com/pricing) for details.")
-        
-        # Add a button to reset API key and change model
-        if st.button("Change AI Model", use_container_width=True):
-            del st.session_state["gpt_api_key"]
-            del st.session_state["openai_model"]
-            # Clear vector DB session state if it exists
-            if "vector_db" in st.session_state:
-                del st.session_state["vector_db"]
-            st.rerun()
-        
-        # Clear Vector Database button - Moved to Document Sources section
-        if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE and False:  # Disabled here
-            # Only show this button if RAG is available
-            if st.button("Clear Vector Database", type="secondary", use_container_width=True):
-                with st.spinner("Clearing vector database..."):
-                    success = lib.clear_vector_database()
-                    if success:
-                        st.success("Vector database cleared successfully!")
-                        # Also clear the vector_db from session state
-                        if "vector_db" in st.session_state:
-                            del st.session_state["vector_db"]
-                        if "selected_doc_sources" in st.session_state:
-                            del st.session_state["selected_doc_sources"]
-                        if "processed_anonymizations" in st.session_state:
-                            del st.session_state["processed_anonymizations"]
-                        st.rerun()
-                    else:
-                        st.error("Failed to clear vector database. If you're seeing a file access error, this could be due to Windows file locks. Try restarting the application.")
-                        if st.button("Restart Application", key="restart_app_button"):
-                            st.rerun()
-        else:
-            if not hasattr(lib, 'RAG_AVAILABLE') or not lib.RAG_AVAILABLE:
-                st.info("RAG functionality not available.")
-        
-        # Add a debug toggle (hidden behind a "secret" checkbox)
-        if st.checkbox("Enable debug mode", key="debug_toggle", value=False):
-            st.session_state.show_debug = True
-        else:
-            st.session_state.show_debug = False
+            else:
+                # If no saved_anonymisation, show disabled button with tooltip
+                st.button(
+                    label="Save & Reverse",
+                    type="primary",
+                    disabled=True,
+                    use_container_width=True,
+                    key="save_conversation_disabled",
+                    help="Process a document first to enable this feature"
+                )
