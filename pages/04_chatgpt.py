@@ -237,15 +237,6 @@ if "gpt_api_key" not in st.session_state:
             st.rerun()
 else:
     st.header(f"ChatGPT Discussion (model: {st.session_state["openai_model"] })")
-    if st.button("Reset Your API Key And GPT model",key="reset_your_api_key_btn"):
-        del st.session_state["gpt_api_key"]
-        del st.session_state["openai_model"]
-        # Clear vector DB session state if it exists
-        if "vector_db" in st.session_state:
-            del st.session_state["vector_db"]
-        if "processed_anonymizations" in st.session_state:
-            del st.session_state["processed_anonymizations"]
-        st.rerun()
 
     # Add a section for advanced settings - MOVED TO TOP
     st.divider()
