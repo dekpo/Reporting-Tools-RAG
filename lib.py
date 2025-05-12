@@ -129,11 +129,11 @@ def del_dialog(string):
         case "saved_anonymisation":
             name = "Anonymized Content"
             icon = ":speech_balloon:"
-            page = "pages/03_anonymize.py"
+            page = "pages/01_anonymize.py"
         case "saved_gpt_answers":
             name = "ChatGPT Answers"
             icon = ":robot_face:"
-            page = "pages/04_chatgpt.py"
+            page = "pages/02_chatgpt.py"
     st.write(f"Do you really want to delete this **{name}**?")
     st.write(f"{icon} **{title}** (Saved: {date})")
     col1, col2 = st.columns(2)
@@ -148,9 +148,9 @@ def del_dialog(string):
 def sidebar():
     st.sidebar.header(":book: Reporting Tools",divider=True)
     st.sidebar.page_link(page="pages/00_home.py",label="Home",icon=":material/home:")
-    st.sidebar.page_link(page="pages/03_anonymize.py",label="Anonymize Content",icon=":material/sms:")
-    st.sidebar.page_link(page="pages/04_chatgpt.py",label="ChatGPT Tool",icon=":material/hexagon:")
-    st.sidebar.page_link(page="pages/05_revert.py",label="Reverse Anonymization",icon=":material/comment:")
+    st.sidebar.page_link(page="pages/01_anonymize.py",label="Anonymize Content",icon=":material/sms:")
+    st.sidebar.page_link(page="pages/02_chatgpt.py",label="ChatGPT Tool",icon=":material/hexagon:")
+    st.sidebar.page_link(page="pages/03_revert.py",label="Reverse Anonymization",icon=":material/comment:")
 
     if "saved_content" in st.session_state or "saved_anonymisation" in st.session_state or "saved_gpt_answers" in st.session_state:
         st.sidebar.header(":floppy_disk: Your Session",divider=True)
@@ -495,6 +495,8 @@ def create_vector_db_from_text(text, title, api_key, entities=None):
         title: The document title
         api_key: OpenAI API key for embeddings
         entities: Optional dictionary containing entity information for reverse anonymization
+                 Note: Entity information is stored separately in document metadata,
+                 not in the vector database chunks, to ensure it's not exposed to the AI agent
     """
     # Check if RAG functionality is available
     if not RAG_AVAILABLE:
@@ -625,7 +627,16 @@ def query_vector_db(collection, query, n_results=5, selected_doc_sources=None):
         # If no results or no document source filtering needed, return the unfiltered results
         if not unfiltered_results["documents"][0] or not selected_doc_sources:
             if unfiltered_results["documents"] and len(unfiltered_results["documents"][0]) > 0:
-                return unfiltered_results["documents"][0][:n_results], unfiltered_results["metadatas"][0][:n_results]
+                # Filter out any sensitive metadata before returning
+                filtered_metadatas = []
+                for metadata in unfiltered_results["metadatas"][0][:n_results]:
+                    # Create a clean copy with only safe fields
+                    filtered_metadata = {
+                        'source': metadata.get('source', 'Unknown'),
+                        'chunk_id': metadata.get('chunk_id', 0)
+                    }
+                    filtered_metadatas.append(filtered_metadata)
+                return unfiltered_results["documents"][0][:n_results], filtered_metadatas
             return [], []
         
         # If we have document sources selected, filter the results manually
@@ -636,7 +647,13 @@ def query_vector_db(collection, query, n_results=5, selected_doc_sources=None):
             # Check if this document belongs to any of the selected sources
             if any(doc_hash in doc_id for doc_hash in selected_doc_sources):
                 filtered_docs.append(unfiltered_results["documents"][0][i])
-                filtered_metadatas.append(unfiltered_results["metadatas"][0][i])
+                # Create a clean copy with only safe fields
+                metadata = unfiltered_results["metadatas"][0][i]
+                filtered_metadata = {
+                    'source': metadata.get('source', 'Unknown'),
+                    'chunk_id': metadata.get('chunk_id', 0)
+                }
+                filtered_metadatas.append(filtered_metadata)
                 
                 # Break if we have enough results
                 if len(filtered_docs) >= n_results:
@@ -654,9 +671,10 @@ def generate_rag_response(client, query, context_docs, context_metadatas, model,
     """
     Generate a response based on the retrieved context and query.
     """
-    # Prepare source information
+    # Prepare source information - only use safe fields
     source_info = []
     for metadata in context_metadatas:
+        # Only use the source field, which should be safe
         source = metadata.get('source', 'Unknown')
         if source not in source_info:
             source_info.append(source)
@@ -680,7 +698,7 @@ def generate_rag_response(client, query, context_docs, context_metadatas, model,
             [{"role": msg["role"], "content": msg["content"]} for msg in chat_history]
         )
     
-    # Add the current query with context
+    # Add the current query with context - only include safe metadata
     user_message = f"Context from documents: {context}\n\nSources: {sources_str}\n\nUser Question: {query}"
     messages.append({"role": "user", "content": user_message})
     
