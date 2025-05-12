@@ -62,3 +62,31 @@ $ streamlit run app.py
 - Document chunking for efficient processing of large documents
 - Entity recognition and anonymization with customizable categories
 - Vector search for finding relevant content across documents
+
+# DTN Reporting Tools - Privacy Features
+
+## Entity Privacy in RAG System
+
+The application implements a privacy-preserving approach for handling sensitive entity information in the Retrieval Augmented Generation (RAG) system:
+
+### How Entity Privacy Works
+
+1. **Separate Storage**: 
+   - Anonymized content is stored in the vector database for semantic search
+   - Entity mappings (original text → anonymized text) are stored separately in document metadata
+   - Entity information is never included in the vector embeddings
+
+2. **Filtered Metadata**:
+   - When retrieving context chunks, the `query_vector_db` function filters metadata
+   - Only safe fields like 'source' and 'chunk_id' are returned to the AI agent
+   - Entity mappings are completely removed from metadata before sending to OpenAI
+
+3. **Safe Context Construction**:
+   - When constructing the prompt for the AI, only document content and safe metadata are included
+   - The AI receives only anonymized text, with no access to the original entities
+
+4. **Reverse Anonymization**:
+   - Entity mappings are available for the reverse anonymization process
+   - This happens locally, after the AI has generated its response
+
+This ensures that sensitive information like names, locations, and organizations remain private while still allowing the system to provide relevant answers and perform reverse anonymization when needed.

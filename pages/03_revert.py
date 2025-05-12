@@ -241,5 +241,5 @@ if "saved_gpt_answers" in st.session_state:
     st.markdown("<p><a href='#top-content'>🔼Go Back To The Top Of This Content🔼</a></p>",unsafe_allow_html=True)
 else:
     st.markdown('<p>You have <b>no entity</b> to re-insert. You must first apply anonymization with the previous tool to be able to keep references of your entities.</p>',unsafe_allow_html=True)
-    st.page_link(page="pages/03_anonymize.py",label="Got To Anonymize Content",icon=":material/sms:",use_container_width=True)
+    st.page_link(page="pages/01_anonymize.py",label="Got To Anonymize Content",icon=":material/sms:",use_container_width=True)
 #st.write(st.session_state)

@@ -520,7 +520,7 @@ else:
                                 model=st.session_state["openai_model"],
                                 messages=[
                                     {"role": "system", "content": "You are a helpful assistant providing information based on the supplied document context. Answer questions accurately using ONLY information from the provided context. When referencing information, mention which document source it came from. If multiple documents contain relevant information, clearly indicate which source each piece of information came from. If the context doesn't contain information to answer the question, admit you don't know rather than making up an answer."},
-                                    {"role": "user", "content": f"Context from {len(context_docs)} document chunks:\n\n{' '.join(context_docs)}\n\nSource metadata:\n{context_metadatas}\n\nUser Question: {prompt}\n\nImportant: Base your answer ONLY on the provided context. Cite document sources when possible."}
+                                    {"role": "user", "content": f"Context from {len(context_docs)} document chunks:\n\n{' '.join(context_docs)}\n\nSource information: {[metadata.get('source', 'Unknown') for metadata in context_metadatas]}\n\nUser Question: {prompt}\n\nImportant: Base your answer ONLY on the provided context. Cite document sources when possible."}
                                 ],
                                 stream=True,
                             )
@@ -551,6 +551,7 @@ else:
                                             st.write(f"Query: '{debug['query']}'")
                                             st.write(f"Total chunks found: {debug['found_contexts']}")
                                             st.write(f"Selected sources: {', '.join(debug['selected_sources']) if debug['selected_sources'] else 'All sources'}")
+                                            # Don't show raw metadata as it might contain sensitive information
                             
                             # Add assistant response to chat history
                             st.session_state.messages.append({"role": "assistant", "content": response})
@@ -701,7 +702,7 @@ else:
                     on_click=lib.save_gpt_answers,
                     args=[st.session_state["saved_anonymisation"]["Title"], conversation_text, entities, attendees]
                 ):
-                    st.switch_page("pages/05_revert.py")
+                    st.switch_page("pages/03_revert.py")
             else:
                 # If no saved_anonymisation, show disabled button with tooltip
                 st.button(

@@ -38,7 +38,7 @@ if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
         with col1:
             st.info(f"Found {len(document_metadata)} document(s) already stored in the database. You can continue working with them.")
         with col2:
-            st.page_link(page="pages/04_chatgpt.py", label="Go to ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
+            st.page_link(page="pages/02_chatgpt.py", label="Go to ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
             
         # Show document titles in an expandable section
         with st.expander("View stored documents"):
@@ -218,7 +218,7 @@ if st.button("**Continue to Anonymization**", type="primary"):
         # Save content for next step
         content_to_save = extracted_text if extracted_text else text_area
         lib.save_content(title_input, content_to_save, {})
-        st.switch_page("./pages/03_anonymize.py")
+        st.switch_page("./pages/01_anonymize.py")
 
 # Display navigation options
 st.divider()
@@ -226,12 +226,12 @@ st.divider()
 col1, col2, col3 = st.columns(3)
 with col1:
    st.header("1) Anonymize")
-   st.page_link(page="pages/03_anonymize.py", label="Go To Anonymize Content", icon=":material/sms:", use_container_width=True)
+   st.page_link(page="pages/01_anonymize.py", label="Go To Anonymize Content", icon=":material/sms:", use_container_width=True)
 
 with col2:
    st.header("2) Ask ChatGPT")
-   st.page_link(page="pages/04_chatgpt.py", label="Go To ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
+   st.page_link(page="pages/02_chatgpt.py", label="Go To ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
 
 with col3:
    st.header("3) Reverse Anonymization")
-   st.page_link(page="pages/05_revert.py", label="Go To Reverse Anonymization", icon=":material/comment:", use_container_width=True)
+   st.page_link(page="pages/03_revert.py", label="Go To Reverse Anonymization", icon=":material/comment:", use_container_width=True)

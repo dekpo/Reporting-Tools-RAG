@@ -211,7 +211,7 @@ else:
             with col3:
 
                 if st.button(label="**Save This Content For Next Step >> Ask ChatGPT**",type="primary",key="save_anonymisation_btn", on_click=lib.save_anonymisation,args=[title,content_txt,document_entities]):
-                    st.switch_page("./pages/04_chatgpt.py")
+                    st.switch_page("./pages/02_chatgpt.py")
             st.divider()
             st.markdown("<p><a href='#top-content'>🔼Go Back To The Top Of This Content🔼</a></p>",unsafe_allow_html=True)
         else:
