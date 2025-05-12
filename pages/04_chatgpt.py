@@ -304,7 +304,7 @@ else:
             # Create selection interface
             selected_docs = []
             for doc in doc_list:
-                col1, col2, col3, col4 = st.columns([0.5, 0.15, 0.15, 0.2])
+                col1, col2, col3 = st.columns([0.6, 0.15, 0.25])
                 with col1:
                     selected = st.checkbox(
                         f"{doc['title']} ({doc['chunks']} chunks)", 
@@ -332,32 +332,6 @@ else:
                             # Set confirmation state and show confirmation message
                             st.session_state["confirm_delete"] = doc['hash']
                             st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
-                
-                with col4:
-                    # Add button to prepare document for reverse anonymization
-                    if st.button("Reverse Anonymize", key=f"reverse_{doc['hash']}"):
-                        with st.spinner(f"Loading '{doc['title']}' for reverse anonymization..."):
-                            # Get document content and entities
-                            doc_content, doc_title, entities_data = lib.get_document_content_from_hash(
-                                doc['hash'], 
-                                api_key=st.session_state["gpt_api_key"]
-                            )
-                            
-                            if doc_content:
-                                # Set up saved_gpt_answers for reverse anonymization
-                                st.session_state["saved_gpt_answers"] = {
-                                    "Title": doc_title,
-                                    "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                    "Data": doc_content,
-                                    "Entities": entities_data,
-                                    "Attendees": {}
-                                }
-                                
-                                # Redirect to reverse anonymization page
-                                st.success(f"Document '{doc_title}' loaded for reverse anonymization!")
-                                st.switch_page("pages/05_revert.py")
-                            else:
-                                st.error(f"Could not retrieve content for '{doc['title']}'")
             
             # Store selected documents in session state
             if "selected_doc_sources" not in st.session_state or st.session_state.selected_doc_sources != selected_docs:
@@ -371,9 +345,13 @@ else:
             # Add Clear Vector Database button at the end of document list
             st.divider()
             if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
-                col_left, col_right = st.columns([0.7, 0.3])
-                with col_right:
-                    if st.button("Clear All Documents", type="secondary", use_container_width=True):
+                # Warning message before the button
+                st.warning("This will remove all documents from the database. This action cannot be undone.", icon="⚠️")
+                
+                # Full-width button with confirmation
+                if st.button("Clear All Documents", type="secondary", use_container_width=True):
+                    # Show confirmation dialog
+                    if st.session_state.get("confirm_clear_all"):
                         with st.spinner("Clearing vector database..."):
                             success = lib.clear_vector_database()
                             if success:
@@ -390,8 +368,12 @@ else:
                                 st.error("Failed to clear vector database. If you're seeing a file access error, this could be due to Windows file locks. Try restarting the application.")
                                 if st.button("Restart Application", key="restart_app_button"):
                                     st.rerun()
-                with col_left:
-                    st.warning("This will remove all documents from the database. This action cannot be undone.", icon="⚠️")
+                        # Clear confirmation state
+                        st.session_state["confirm_clear_all"] = False
+                    else:
+                        # Set confirmation state and show confirmation message
+                        st.session_state["confirm_clear_all"] = True
+                        st.error("Click 'Clear All Documents' again to confirm deletion of ALL documents.", icon="⚠️")
         else:
             st.info("No documents found in the database. Process a document to add it to the sources.")
         st.divider()
