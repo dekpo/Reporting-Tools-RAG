@@ -11,6 +11,7 @@ import re
 import html
 import io
 import time
+import os
 
 # Utils
 import lib
@@ -24,6 +25,46 @@ lib.sidebar()
 st.title(lib.APP_TITLE)
 
 st.divider()
+
+# Check for existing documents in the ChromaDB database
+persist_directory = './chroma_db'
+if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
+    document_metadata = lib.load_document_metadata(persist_directory)
+    if document_metadata:
+        # Import datetime here since it's only needed if documents exist
+        from datetime import datetime
+        
+        col1, col2 = st.columns([0.7, 0.3])
+        with col1:
+            st.info(f"Found {len(document_metadata)} document(s) already stored in the database. You can continue working with them.")
+        with col2:
+            st.page_link(page="pages/04_chatgpt.py", label="Go to ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
+            
+        # Show document titles in an expandable section
+        with st.expander("View stored documents"):
+            # Convert metadata to a more usable format for display
+            doc_list = []
+            for doc_hash, doc_data in document_metadata.items():
+                doc_list.append({
+                    "title": doc_data["title"],
+                    "timestamp": doc_data.get("timestamp", 0)
+                })
+            
+            # Sort by timestamp (newest first)
+            doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
+            
+            # Display document titles
+            for i, doc in enumerate(doc_list):
+                try:
+                    if doc["timestamp"] > 0:
+                        timestamp = datetime.fromtimestamp(doc["timestamp"])
+                        date_str = timestamp.strftime('%Y-%m-%d')
+                    else:
+                        date_str = "Unknown date"
+                except Exception:
+                    date_str = "Unknown date"
+                
+                st.write(f"**{i+1}.** {doc['title']} _(Added: {date_str})_")
 
 st.markdown("<p>Welcome to this set of tools! Upload your document, anonymize content, ask ChatGPT for insights, and revert anonymization when needed.</p>",unsafe_allow_html=True)
 

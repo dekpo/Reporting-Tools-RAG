@@ -153,7 +153,7 @@ def sidebar():
     st.sidebar.page_link(page="pages/05_revert.py",label="Reverse Anonymization",icon=":material/comment:")
 
     if "saved_content" in st.session_state or "saved_anonymisation" in st.session_state or "saved_gpt_answers" in st.session_state:
-        st.sidebar.header(":floppy_disk: Your Backup",divider=True)
+        st.sidebar.header(":floppy_disk: Your Session",divider=True)
         if "saved_content" in st.session_state:
             st.sidebar.write(":page_with_curl: **Extracted Content**")
             if st.sidebar.button(label=f":wastebasket: {st.session_state['saved_content']['Title'][:18]}...",type="secondary",key="del_button02",use_container_width=True):
