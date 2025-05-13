@@ -236,11 +236,11 @@ if "gpt_api_key" not in st.session_state:
             time.sleep(1)
             st.rerun()
 else:
-    st.header(f"ChatGPT Discussion (model: {st.session_state["openai_model"] })")
+    st.header(f"ChatGPT Discussion ({st.session_state["openai_model"] })")
 
     # Add a section for advanced settings - MOVED TO TOP
     st.divider()
-    st.subheader("Advanced Settings")
+    st.subheader("Model Settings")
     
     # Display current model and provide model information
     st.info(f"Current model: **{st.session_state['openai_model']}**")
@@ -257,7 +257,7 @@ else:
         st.caption(model_info[st.session_state["openai_model"]])
     
     # Model rate information
-    st.caption("**Note:** Different models have different pricing. Check [OpenAI pricing](https://openai.com/pricing) for details.")
+    st.caption("**Note:** Different models have different pricing. Check [OpenAI API Pricing](https://openai.com/api/pricing/) for details.")
     
     # Add a button to reset API key and change model
     if st.button("Change AI Model", use_container_width=True):

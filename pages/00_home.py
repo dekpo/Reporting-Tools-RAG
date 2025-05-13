@@ -219,19 +219,3 @@ if st.button("**Continue to Anonymization**", type="primary"):
         content_to_save = extracted_text if extracted_text else text_area
         lib.save_content(title_input, content_to_save, {})
         st.switch_page("./pages/01_anonymize.py")
-
-# Display navigation options
-st.divider()
-
-col1, col2, col3 = st.columns(3)
-with col1:
-   st.header("1) Anonymize")
-   st.page_link(page="pages/01_anonymize.py", label="Go To Anonymize Content", icon=":material/sms:", use_container_width=True)
-
-with col2:
-   st.header("2) Ask ChatGPT")
-   st.page_link(page="pages/02_chatgpt.py", label="Go To ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
-
-with col3:
-   st.header("3) Reverse Anonymization")
-   st.page_link(page="pages/03_revert.py", label="Go To Reverse Anonymization", icon=":material/comment:", use_container_width=True)
