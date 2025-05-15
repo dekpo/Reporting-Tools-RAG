@@ -195,6 +195,8 @@ else:
             with col1:
                 doc_download = Document()
                 raw_text = lib.strip_tags(txt)
+                # Filter out invalid XML characters before adding to the document
+                raw_text = lib.filter_xml_chars(raw_text)
                 doc_download.add_paragraph(raw_text)
 
                 bio = io.BytesIO()

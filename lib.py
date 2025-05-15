@@ -340,6 +340,21 @@ def valid_xml_char_ordinal(c):
         0x10000 <= codepoint <= 0x10FFFF
         )
 
+def filter_xml_chars(text):
+    """
+    Filter out characters that are not valid in XML documents.
+    This is useful when saving text to formats that use XML internally (like .docx).
+    
+    Args:
+        text: String to filter
+        
+    Returns:
+        String containing only valid XML characters
+    """
+    if not text:
+        return ""
+    return ''.join(c for c in text if valid_xml_char_ordinal(c))
+
 def get_rand_id():
     array = list("123456789")
     random.shuffle( array )

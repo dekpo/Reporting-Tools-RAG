@@ -631,14 +631,18 @@ else:
                 doc_title = st.session_state["saved_anonymisation"]["Title"].replace(">"," ")
             else:
                 doc_title = "Chat Conversation"
+            # Filter the title for invalid XML characters
+            doc_title = lib.filter_xml_chars(doc_title)
             doc_download.add_heading(doc_title, level=1)
             
             # Add conversation to document
             for message in st.session_state.messages:
                 if message["role"] == "user":
-                    doc_download.add_heading(f"Question: {message['content']}", level=2)
+                    question_text = lib.filter_xml_chars(message['content'])
+                    doc_download.add_heading(f"Question: {question_text}", level=2)
                 else:
-                    doc_download.add_paragraph(message["content"])
+                    answer_text = lib.filter_xml_chars(message['content'])
+                    doc_download.add_paragraph(answer_text)
             
             # Save document to buffer
             bio = io.BytesIO()

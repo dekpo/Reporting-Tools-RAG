@@ -225,7 +225,11 @@ if "saved_gpt_answers" in st.session_state:
     with col3:
         doc_download = Document()
         doc_title = st.session_state["saved_gpt_answers"]["Title"].replace(">"," ")
+        # Filter the title for invalid XML characters
+        doc_title = lib.filter_xml_chars(doc_title)
         doc_download.add_heading(doc_title,level=1)
+        # Filter out invalid XML characters before adding to the document
+        raw_text = lib.filter_xml_chars(raw_text)
         doc_download.add_paragraph(raw_text)
         bio = io.BytesIO()
         doc_download.save(bio)
