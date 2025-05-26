@@ -71,6 +71,8 @@ def save_content(title,content,attendees):
         "Attendees": attendees
 
     }
+    # Clear entity cache when new content is saved
+    clear_entity_cache()
 
 def save_anonymisation(title,content,entities):
     st.session_state["saved_anonymisation"] = {
@@ -366,6 +368,43 @@ def add_zero(nb):
     if number<10:
         number = f"0{nb}"
     return number
+
+def clear_entity_cache():
+    """
+    Clear cached entity extraction results when content changes.
+    This should be called when new content is uploaded or modified.
+    """
+    keys_to_remove = []
+    for key in st.session_state:
+        if key.startswith("entities_cache_"):
+            keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
+        del st.session_state[key]
+    
+    # Also clear the last processed hash
+    if "last_processed_hash" in st.session_state:
+        del st.session_state["last_processed_hash"]
+
+def clear_extraction_cache():
+    """
+    Clear cached file extraction results.
+    This can be called when users want to force re-processing of files.
+    """
+    keys_to_remove = []
+    for key in st.session_state:
+        if key.startswith("extracted_content_"):
+            keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
+        del st.session_state[key]
+
+def clear_all_caches():
+    """
+    Clear all application caches (entity extraction and file extraction).
+    """
+    clear_entity_cache()
+    clear_extraction_cache()
 
 # RAG-related functions
 def ensure_rag_directories_exist():
