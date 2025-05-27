@@ -12,5 +12,10 @@ PyMuPDF
 # Core RAG dependencies
 langchain>=0.0.335
 chromadb
+# Tool-calling and multi-modal agent dependencies
+langchain-experimental
+langchain-openai
+openpyxl
+tabulate
 # Additional needed packages
 typing-extensions

@@ -1159,3 +1159,470 @@ def update_document_entities(document_hash, entities):
     except Exception as e:
         st.error(f"Error updating document entities: {e}")
         return False
+
+# ===== TABULAR DATA HANDLING FUNCTIONS =====
+
+def get_delimiter(file, bytes=4096):
+    """Detect CSV delimiter using csv.Sniffer"""
+    import csv
+    from io import StringIO
+    
+    sniffer = csv.Sniffer()
+    stringio = StringIO(file.getvalue().decode("utf-8"))
+    data = stringio.read(bytes)
+    delimiter = sniffer.sniff(data).delimiter
+    return delimiter
+
+def save_tabular_metadata(title, df, file_hash):
+    """
+    Save metadata about tabular datasets for persistence.
+    
+    Args:
+        title: The title/name of the dataset
+        df: The pandas DataFrame
+        file_hash: Unique hash for the file
+    """
+    import pandas as pd
+    
+    metadata_path = "./data_storage/tabular_metadata.json"
+    
+    # Create directory if it doesn't exist
+    os.makedirs("./data_storage", exist_ok=True)
+    
+    # Save DataFrame to parquet for efficient storage
+    df_path = f"./data_storage/{file_hash}.parquet"
+    df.to_parquet(df_path)
+    
+    # Load existing metadata
+    if os.path.exists(metadata_path):
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+    else:
+        metadata = {}
+    
+    # Add new dataset metadata
+    metadata[file_hash] = {
+        "title": title,
+        "file_path": df_path,
+        "columns": list(df.columns),
+        "shape": df.shape,
+        "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
+        "timestamp": time.time()
+    }
+    
+    # Save updated metadata
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+def load_tabular_datasets():
+    """
+    Load all saved tabular datasets into session state.
+    
+    Returns:
+        dict: Dictionary of dataset_title -> DataFrame
+    """
+    import pandas as pd
+    
+    metadata_path = "./data_storage/tabular_metadata.json"
+    
+    if not os.path.exists(metadata_path):
+        return {}
+    
+    try:
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+    except Exception as e:
+        st.warning(f"Could not load tabular metadata: {e}")
+        return {}
+    
+    datasets = {}
+    for file_hash, info in metadata.items():
+        try:
+            if os.path.exists(info["file_path"]):
+                df = pd.read_parquet(info["file_path"])
+                datasets[info["title"]] = df
+            else:
+                st.warning(f"Dataset file not found: {info['title']}")
+        except Exception as e:
+            st.warning(f"Could not load dataset {info['title']}: {e}")
+    
+    return datasets
+
+def get_tabular_metadata():
+    """
+    Get metadata about all saved tabular datasets.
+    
+    Returns:
+        dict: Metadata dictionary
+    """
+    metadata_path = "./data_storage/tabular_metadata.json"
+    
+    if not os.path.exists(metadata_path):
+        return {}
+    
+    try:
+        with open(metadata_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        st.warning(f"Could not load tabular metadata: {e}")
+        return {}
+
+def delete_tabular_dataset(file_hash):
+    """
+    Delete a specific tabular dataset.
+    
+    Args:
+        file_hash: Hash of the dataset to delete
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    metadata_path = "./data_storage/tabular_metadata.json"
+    
+    try:
+        # Load metadata
+        if not os.path.exists(metadata_path):
+            return False
+            
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+        
+        # Check if dataset exists
+        if file_hash not in metadata:
+            st.warning(f"Dataset with hash {file_hash} not found.")
+            return False
+        
+        # Get dataset info
+        dataset_info = metadata[file_hash]
+        dataset_title = dataset_info.get('title', 'Unknown dataset')
+        
+        # Remove the parquet file
+        if os.path.exists(dataset_info["file_path"]):
+            os.remove(dataset_info["file_path"])
+        
+        # Remove from metadata
+        del metadata[file_hash]
+        
+        # Save updated metadata
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        # Remove from session state if present
+        if "tabular_datasets" in st.session_state:
+            if dataset_title in st.session_state.tabular_datasets:
+                del st.session_state.tabular_datasets[dataset_title]
+        
+        st.success(f"Dataset '{dataset_title}' has been removed.")
+        return True
+        
+    except Exception as e:
+        st.error(f"Error deleting dataset: {e}")
+        return False
+
+def clear_all_tabular_data():
+    """
+    Clear all tabular datasets and metadata.
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Remove data storage directory
+        data_storage_path = "./data_storage"
+        if os.path.exists(data_storage_path):
+            shutil.rmtree(data_storage_path)
+        
+        # Clear from session state
+        if "tabular_datasets" in st.session_state:
+            del st.session_state.tabular_datasets
+        
+        st.success("All tabular datasets have been cleared.")
+        return True
+        
+    except Exception as e:
+        st.error(f"Error clearing tabular data: {e}")
+        return False
+
+def generate_file_hash(file_content, file_name, file_type):
+    """Generate a unique hash for uploaded file to enable caching"""
+    content_str = f"{file_name}_{file_type}_{len(file_content)}"
+    return hashlib.md5(content_str.encode()).hexdigest()
+
+# ===== TOOL DEFINITIONS FOR MULTI-MODAL AGENT =====
+
+# Import tool decorators - wrapped in try/except for graceful degradation
+TOOLS_AVAILABLE = True
+try:
+    from langchain.tools import tool
+    from langchain.agents import AgentType, create_openai_tools_agent, AgentExecutor
+    from langchain_experimental.agents import create_pandas_dataframe_agent
+    from langchain_openai import ChatOpenAI
+    from langchain.prompts import ChatPromptTemplate
+except ImportError:
+    TOOLS_AVAILABLE = False
+    st.warning("Tool-calling dependencies are missing. Please install langchain-experimental and langchain-openai.")
+
+@tool
+def search_documents(query: str, doc_sources: str = None) -> str:
+    """
+    Search through uploaded text documents using semantic similarity.
+    
+    Args:
+        query: The search query to find relevant information in documents
+        doc_sources: Optional comma-separated list of document titles to search in specific documents
+    
+    Returns:
+        Relevant text passages from documents with source information
+    """
+    if not hasattr(st.session_state, 'vector_db') or st.session_state.vector_db is None:
+        return "No text documents are currently loaded in the database."
+    
+    try:
+        # Parse doc_sources if provided
+        selected_sources = None
+        if doc_sources:
+            # Convert document titles to hashes if needed
+            # For now, use the existing selected_doc_sources
+            selected_sources = st.session_state.get("selected_doc_sources", [])
+        
+        # Query the vector database
+        context_docs, context_metadatas = query_vector_db(
+            st.session_state.vector_db, 
+            query,
+            n_results=5,
+            selected_doc_sources=selected_sources
+        )
+        
+        if not context_docs:
+            return f"No relevant information found in documents for query: '{query}'"
+        
+        # Format results for the LLM
+        result = f"Found {len(context_docs)} relevant passages for '{query}':\n\n"
+        for i, (doc, metadata) in enumerate(zip(context_docs, context_metadatas)):
+            source = metadata.get('source', 'Unknown Document')
+            result += f"[Source: {source}]\n{doc}\n\n"
+        
+        return result
+        
+    except Exception as e:
+        return f"Error searching documents: {str(e)}"
+
+@tool
+def analyze_tabular_data(query: str, dataset_name: str = None) -> str:
+    """
+    Perform analysis on uploaded CSV/Excel data using natural language queries.
+    
+    Args:
+        query: Natural language query about the data (e.g., "show top 5 products by revenue", "calculate average sales")
+        dataset_name: Optional specific dataset name to analyze (if not provided, uses the first available dataset)
+    
+    Returns:
+        Analysis results including statistics, trends, or specific data points
+    """
+    # Get available datasets from session state
+    available_datasets = st.session_state.get("tabular_datasets", {})
+    
+    if not available_datasets:
+        return "No tabular datasets are currently loaded. Please upload a CSV or Excel file first."
+    
+    try:
+        # Select dataset
+        if dataset_name and dataset_name in available_datasets:
+            df = available_datasets[dataset_name]
+            dataset_info = f"Analyzing dataset: {dataset_name}"
+        else:
+            # Use first available dataset
+            dataset_name = list(available_datasets.keys())[0]
+            df = available_datasets[dataset_name]
+            dataset_info = f"Analyzing dataset: {dataset_name}"
+        
+        # Create pandas agent for this specific query
+        if not TOOLS_AVAILABLE:
+            return "Pandas agent functionality is not available. Please install required dependencies."
+        
+        llm = ChatOpenAI(
+            temperature=0, 
+            model=st.session_state.get("openai_model", "gpt-3.5-turbo"), 
+            api_key=st.session_state["gpt_api_key"]
+        )
+        
+        agent = create_pandas_dataframe_agent(
+            llm,
+            df,
+            verbose=False,
+            agent_type=AgentType.OPENAI_FUNCTIONS,
+            allow_dangerous_code=True
+        )
+        
+        # Execute the query
+        result = agent.invoke(query)
+        return f"{dataset_info}\n\nQuery: {query}\n\nResult:\n{result['output']}"
+        
+    except Exception as e:
+        return f"Error analyzing data: {str(e)}"
+
+@tool
+def cross_reference_analysis(document_query: str, data_query: str) -> str:
+    """
+    Find connections between document content and tabular data by analyzing both sources.
+    
+    Args:
+        document_query: What to search for in the text documents
+        data_query: What to analyze in the tabular data
+    
+    Returns:
+        Combined insights showing connections between text and data sources
+    """
+    try:
+        # Get document insights
+        doc_results = search_documents(document_query)
+        
+        # Get data insights  
+        data_results = analyze_tabular_data(data_query)
+        
+        # Check if we got valid results from both sources
+        if "No relevant information found" in doc_results and "No tabular datasets" in data_results:
+            return "No data sources available for cross-reference analysis."
+        elif "No relevant information found" in doc_results:
+            return f"Could not find relevant information in documents for '{document_query}', but here's the data analysis:\n\n{data_results}"
+        elif "No tabular datasets" in data_results:
+            return f"No tabular data available for analysis, but here's what I found in documents:\n\n{doc_results}"
+        
+        # Combine the results
+        combined_analysis = f"""
+CROSS-REFERENCE ANALYSIS
+
+Document Analysis for '{document_query}':
+{doc_results}
+
+Data Analysis for '{data_query}':
+{data_results}
+
+SYNTHESIS:
+Based on the document content and data analysis above, here are the key connections and insights:
+- The documents provide context and qualitative insights
+- The data provides quantitative evidence and trends
+- Together, they offer a comprehensive view of the topic
+"""
+        
+        return combined_analysis
+        
+    except Exception as e:
+        return f"Error performing cross-reference analysis: {str(e)}"
+
+@tool
+def get_data_summary(dataset_name: str = None) -> str:
+    """
+    Get a summary overview of the available tabular datasets including column information and basic statistics.
+    
+    Args:
+        dataset_name: Optional specific dataset name to summarize (if not provided, summarizes all datasets)
+    
+    Returns:
+        Summary information about the dataset(s) including columns, data types, and basic statistics
+    """
+    available_datasets = st.session_state.get("tabular_datasets", {})
+    
+    if not available_datasets:
+        return "No tabular datasets are currently loaded."
+    
+    try:
+        if dataset_name and dataset_name in available_datasets:
+            # Summarize specific dataset
+            df = available_datasets[dataset_name]
+            summary = f"Dataset: {dataset_name}\n"
+            summary += f"Shape: {df.shape[0]} rows, {df.shape[1]} columns\n\n"
+            summary += f"Columns:\n"
+            for col in df.columns:
+                summary += f"- {col} ({df[col].dtype})\n"
+            summary += f"\nBasic Statistics:\n{df.describe()}"
+            return summary
+        else:
+            # Summarize all datasets
+            summary = f"Available Datasets ({len(available_datasets)}):\n\n"
+            for name, df in available_datasets.items():
+                summary += f"• {name}: {df.shape[0]} rows, {df.shape[1]} columns\n"
+                summary += f"  Columns: {', '.join(df.columns[:5])}{'...' if len(df.columns) > 5 else ''}\n\n"
+            return summary
+            
+    except Exception as e:
+        return f"Error getting data summary: {str(e)}"
+
+def create_unified_agent():
+    """
+    Create a unified agent that can work with both text documents and tabular data.
+    
+    Returns:
+        AgentExecutor: The configured agent executor
+    """
+    if not TOOLS_AVAILABLE:
+        st.error("Tool-calling functionality is not available. Please install required dependencies.")
+        return None
+    
+    # Define all available tools
+    tools = [
+        search_documents,
+        analyze_tabular_data,
+        cross_reference_analysis,
+        get_data_summary
+    ]
+    
+    # Count available data sources
+    num_documents = len(st.session_state.get('selected_doc_sources', []))
+    num_datasets = len(st.session_state.get('tabular_datasets', {}))
+    
+    # Create custom prompt that understands the available data types
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", f"""You are an intelligent assistant that can analyze both text documents and tabular data.
+
+Available capabilities:
+- search_documents: Find information in uploaded text documents (PDFs, DOCX, transcripts, etc.)
+- analyze_tabular_data: Perform analysis on CSV/Excel data using pandas operations
+- cross_reference_analysis: Find connections between documents and data
+- get_data_summary: Get overview information about available datasets
+
+Current session contains:
+- Text Documents: {num_documents} documents available for search
+- Tabular Datasets: {num_datasets} datasets available for analysis
+
+When users ask questions:
+1. Determine if they need document search, data analysis, or both
+2. Use the appropriate tools to gather information
+3. Provide comprehensive answers that combine insights from all relevant sources
+4. If a query could benefit from both text and data analysis, use cross_reference_analysis
+5. Always cite your sources and be specific about which documents or datasets you're referencing
+
+Guidelines:
+- For questions about trends, statistics, or numerical analysis: use analyze_tabular_data
+- For questions about content, discussions, or qualitative information: use search_documents  
+- For questions that need both perspectives: use cross_reference_analysis
+- If unsure about available data: use get_data_summary first
+"""),
+        ("user", "{input}"),
+        ("assistant", "{agent_scratchpad}")
+    ])
+    
+    # Create the LLM
+    llm = ChatOpenAI(
+        temperature=0,
+        model=st.session_state.get("openai_model", "gpt-3.5-turbo"),
+        api_key=st.session_state["gpt_api_key"]
+    )
+    
+    # Create the agent
+    agent = create_openai_tools_agent(llm, tools, prompt)
+    
+    # Create agent executor with conditional verbose mode
+    # Only show verbose output in terminal if debug mode is enabled
+    debug_mode = st.session_state.get("show_debug", False)
+    
+    agent_executor = AgentExecutor(
+        agent=agent, 
+        tools=tools,
+        verbose=debug_mode,  # Only verbose in terminal when debug is on
+        handle_parsing_errors=True,
+        max_iterations=3,  # Prevent infinite loops
+        return_intermediate_steps=True  # Capture steps for UI display
+    )
+    
+    return agent_executor

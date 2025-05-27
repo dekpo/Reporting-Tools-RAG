@@ -233,6 +233,16 @@ if "gpt_api_key" not in st.session_state:
                         except Exception as e:
                             st.error(f"Error loading document database: {e}")
             
+            # Load existing tabular datasets
+            with st.spinner("Loading tabular datasets..."):
+                try:
+                    tabular_datasets = lib.load_tabular_datasets()
+                    if tabular_datasets:
+                        st.session_state.tabular_datasets = tabular_datasets
+                        st.success(f"Loaded {len(tabular_datasets)} tabular dataset(s).")
+                except Exception as e:
+                    st.error(f"Error loading tabular datasets: {e}")
+            
             time.sleep(1)
             st.rerun()
 else:
@@ -268,11 +278,20 @@ else:
             del st.session_state["vector_db"]
         st.rerun()
     
-    # Add a debug toggle (hidden behind a "secret" checkbox)
-    if st.checkbox("Enable debug mode", key="debug_toggle", value=False):
-        st.session_state.show_debug = True
-    else:
-        st.session_state.show_debug = False
+    # Add a debug toggle with better visibility and explanation
+    with st.expander("🔧 Advanced Settings", expanded=False):
+        debug_enabled = st.checkbox(
+            "Enable debug mode", 
+            key="debug_toggle", 
+            value=False,
+            help="Show detailed information about agent tool usage and execution steps. Useful for understanding how the AI processes your questions."
+        )
+        st.session_state.show_debug = debug_enabled
+        
+        if debug_enabled:
+            st.info("🔍 Debug mode is **ON**. You'll see detailed execution information after each AI response.")
+        else:
+            st.info("🔍 Debug mode is **OFF**. Clean interface with no technical details shown.")
 
     # Document Source Selection - Moved below Advanced Settings
     if "vector_db" in st.session_state and st.session_state.vector_db is not None:
@@ -378,9 +397,105 @@ else:
             st.info("No documents found in the database. Process a document to add it to the sources.")
         st.divider()
 
+    # Tabular Dataset Sources - New section for CSV/Excel data
+    if "tabular_datasets" in st.session_state and st.session_state.tabular_datasets:
+        st.divider()
+        st.subheader("Tabular Data Sources")
+        
+        # Load tabular metadata
+        tabular_metadata = lib.get_tabular_metadata()
+        
+        if tabular_metadata:
+            # Display dataset list with selection options
+            st.write("Select datasets to use as sources for your questions:")
+            
+            # Convert metadata to a more usable format for display
+            dataset_list = []
+            for file_hash, dataset_data in tabular_metadata.items():
+                dataset_list.append({
+                    "hash": file_hash,
+                    "title": dataset_data["title"],
+                    "shape": dataset_data["shape"],
+                    "columns": dataset_data["columns"],
+                    "timestamp": dataset_data.get("timestamp", 0),
+                    "active": dataset_data.get("active", True)
+                })
+            
+            # Sort by timestamp (newest first)
+            dataset_list.sort(key=lambda x: x["timestamp"], reverse=True)
+            
+            # Create selection interface
+            selected_datasets = []
+            for dataset in dataset_list:
+                col1, col2, col3 = st.columns([0.6, 0.15, 0.25])
+                with col1:
+                    selected = st.checkbox(
+                        f"{dataset['title']} ({dataset['shape'][0]} rows, {dataset['shape'][1]} cols)", 
+                        value=dataset['active'],
+                        key=f"dataset_select_{dataset['hash']}"
+                    )
+                    if selected:
+                        selected_datasets.append(dataset['title'])
+                
+                with col2:
+                    timestamp = datetime.fromtimestamp(dataset["timestamp"])
+                    st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                
+                with col3:
+                    if st.button("Remove", key=f"remove_dataset_{dataset['hash']}"):
+                        if st.session_state.get("confirm_delete_dataset") == dataset['hash']:
+                            # If already confirmed, perform the deletion
+                            with st.spinner(f"Deleting '{dataset['title']}'..."):
+                                success = lib.delete_tabular_dataset(dataset['hash'])
+                                if success:
+                                    st.rerun()
+                            # Clear confirmation state
+                            st.session_state["confirm_delete_dataset"] = None
+                        else:
+                            # Set confirmation state and show confirmation message
+                            st.session_state["confirm_delete_dataset"] = dataset['hash']
+                            st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+            
+            # Store selected datasets in session state
+            if "selected_datasets" not in st.session_state or st.session_state.selected_datasets != selected_datasets:
+                st.session_state.selected_datasets = selected_datasets
+            
+            # Update metadata with active status
+            for file_hash, dataset_data in tabular_metadata.items():
+                dataset_data['active'] = dataset_data['title'] in selected_datasets
+            # Note: We would need to add a save function for tabular metadata if we want to persist active status
+            
+            # Add Clear All Datasets button
+            st.divider()
+            st.warning("This will remove all datasets from storage. This action cannot be undone.", icon="⚠️")
+            
+            if st.button("Clear All Datasets", type="secondary", use_container_width=True):
+                if st.session_state.get("confirm_clear_all_datasets"):
+                    with st.spinner("Clearing all tabular datasets..."):
+                        success = lib.clear_all_tabular_data()
+                        if success:
+                            st.success("All datasets cleared successfully!")
+                            # Clear from session state
+                            if "tabular_datasets" in st.session_state:
+                                del st.session_state["tabular_datasets"]
+                            if "selected_datasets" in st.session_state:
+                                del st.session_state["selected_datasets"]
+                            st.rerun()
+                        else:
+                            st.error("Failed to clear datasets.")
+                    # Clear confirmation state
+                    st.session_state["confirm_clear_all_datasets"] = False
+                else:
+                    # Set confirmation state and show confirmation message
+                    st.session_state["confirm_clear_all_datasets"] = True
+                    st.error("Click 'Clear All Datasets' again to confirm deletion of ALL datasets.", icon="⚠️")
+        else:
+            st.info("No datasets found in storage. Upload a CSV or Excel file to add datasets.")
+        st.divider()
+
     # CONVERSATION SECTION - Proper placement for Streamlit chat
-    st.subheader("Chat with your document(s)")
-    st.markdown("<p>Ask questions about your anonymized content. The AI will provide relevant answers based on the context of your document(s).</p>",unsafe_allow_html=True)
+    st.subheader("Chat with your documents and data")
+    st.markdown("<p>Ask questions about your documents and datasets. The AI can analyze text content, perform data analysis, and find connections between different sources.</p>",unsafe_allow_html=True)
 
     client = OpenAI(api_key=st.session_state["gpt_api_key"])
 
@@ -456,23 +571,26 @@ else:
                             # Set vector_db to None to indicate RAG is not available
                             st.session_state.vector_db = None
 
-    # Show a warning if no document is loaded AND no vector DB is available
-    if "saved_anonymisation" not in st.session_state and ("vector_db" not in st.session_state or st.session_state.vector_db is None):
-        st.warning("No document loaded. Please go to the Anonymize page to process a document first.")
+    # Check available data sources and show appropriate messages
+    has_documents = ("vector_db" in st.session_state and st.session_state.vector_db is not None) or ("saved_anonymisation" in st.session_state)
+    has_datasets = "tabular_datasets" in st.session_state and st.session_state.tabular_datasets
+    
+    if not has_documents and not has_datasets:
+        st.warning("No data sources loaded. Please upload documents or datasets to begin analysis.")
     else:
-        # Display a message based on whether RAG is available
-        if "vector_db" not in st.session_state or st.session_state.vector_db is None:
-            if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
-                st.warning("Document database not created. Please try processing your document again.")
-            else:
-                st.info("Using traditional question answering. RAG functionality is not available.")
-        else:
-            # Check if we're using a previously stored document without its content
-            if "saved_anonymisation" in st.session_state and ("Data" not in st.session_state["saved_anonymisation"] or not st.session_state["saved_anonymisation"].get("Data")):
-                st.info("You're viewing previously stored document sources. You can ask questions about these documents from previous sessions.")
+        # Show what's available
+        available_sources = []
+        if has_documents:
+            num_docs = len(st.session_state.get('selected_doc_sources', []))
+            available_sources.append(f"{num_docs} text document(s)")
+        if has_datasets:
+            num_datasets = len(st.session_state.get('tabular_datasets', {}))
+            available_sources.append(f"{num_datasets} tabular dataset(s)")
+        
+        st.info(f"Ready to analyze: {', '.join(available_sources)}")
 
-    # Chat input for user questions - AT THE BOTTOM as per Streamlit chat pattern
-    if prompt := st.chat_input("Ask a question about your document", max_chars=8000):
+    # Chat input for user questions - UNIFIED AGENT APPROACH
+    if prompt := st.chat_input("Ask questions about your documents and data", max_chars=8000):
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
@@ -480,85 +598,119 @@ else:
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        # Generate response using RAG
+        # Generate response using UNIFIED AGENT
         with st.chat_message("assistant"):
             try:
-                with st.spinner("Searching document and generating response..."):
-                    # Check if we can use RAG approach
-                    if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE and st.session_state.vector_db is not None:
-                        # Query the vector database
-                        context_docs, context_metadatas = lib.query_vector_db(
-                            st.session_state.vector_db, 
-                            prompt,
-                            n_results=5,
-                            selected_doc_sources=st.session_state.get("selected_doc_sources", [])
-                        )
+                with st.spinner("Analyzing your request..."):
+                    # Check if tool-calling is available
+                    if hasattr(lib, 'TOOLS_AVAILABLE') and lib.TOOLS_AVAILABLE:
+                        # Create unified agent
+                        agent_executor = lib.create_unified_agent()
                         
-                        # Log debugging information
-                        st.session_state["last_query_debug"] = {
-                            "query": prompt,
-                            "found_contexts": len(context_docs),
-                            "selected_sources": st.session_state.get("selected_doc_sources", [])
-                        }
-                        
-                        if not context_docs:
-                            # No relevant context found
-                            response = "I couldn't find relevant information in the document to answer your question. Please try rephrasing your question or ask something else about the document content."
+                        if agent_executor is not None:
+                            # Execute the query using the unified agent
+                            result = agent_executor.invoke({"input": prompt})
+                            response = result["output"]
+                            
+                            # Display the response
                             st.markdown(response)
-                            st.session_state.messages.append({"role": "assistant", "content": response})
-                        else:
-                            # Debug info in dev environment
-                            if "show_debug" in st.session_state and st.session_state.show_debug:
-                                with st.expander("Debug Information (Admin only)"):
-                                    st.write(f"Found {len(context_docs)} context chunks")
-                                    st.write("First few words of each chunk:")
-                                    for i, doc in enumerate(context_docs[:3]):
-                                        st.write(f"{i+1}. {doc[:50]}...")
                             
-                            # Stream the response for a better user experience
-                            stream = client.chat.completions.create(
-                                model=st.session_state["openai_model"],
-                                messages=[
-                                    {"role": "system", "content": "You are a helpful assistant providing information based on the supplied document context. Answer questions accurately using ONLY information from the provided context. When referencing information, mention which document source it came from. If multiple documents contain relevant information, clearly indicate which source each piece of information came from. If the context doesn't contain information to answer the question, admit you don't know rather than making up an answer."},
-                                    {"role": "user", "content": f"Context from {len(context_docs)} document chunks:\n\n{' '.join(context_docs)}\n\nSource information: {[metadata.get('source', 'Unknown') for metadata in context_metadatas]}\n\nUser Question: {prompt}\n\nImportant: Base your answer ONLY on the provided context. Cite document sources when possible."}
-                                ],
-                                stream=True,
-                            )
-                            
-                            # Display streaming response
-                            response = st.write_stream(stream)
-                            
-                            # Add a section showing the sources used
-                            if context_metadatas:
-                                with st.expander("View document sources used"):
-                                    sources_used = {}
-                                    for metadata in context_metadatas:
-                                        if "source" in metadata:
-                                            source = metadata["source"]
-                                            if source not in sources_used:
-                                                sources_used[source] = 0
-                                            sources_used[source] += 1
+                            # Show debug information if enabled
+                            if st.session_state.get("show_debug", False):
+                                with st.expander("🔍 Agent Execution Details (Debug Mode)", expanded=False):
+                                    # Show the tools that were used
+                                    if "intermediate_steps" in result and result["intermediate_steps"]:
+                                        st.write("### 🛠️ Tools Used:")
+                                        
+                                        for i, (action, observation) in enumerate(result["intermediate_steps"]):
+                                            # Extract tool name and input
+                                            tool_name = action.tool if hasattr(action, 'tool') else 'Unknown Tool'
+                                            tool_input = action.tool_input if hasattr(action, 'tool_input') else {}
+                                            
+                                            # Display tool usage in a nice format
+                                            st.write(f"**Step {i+1}: {tool_name}**")
+                                            
+                                            # Show tool input parameters
+                                            if tool_input:
+                                                with st.container():
+                                                    st.write("*Input parameters:*")
+                                                    for key, value in tool_input.items():
+                                                        st.write(f"- {key}: `{value}`")
+                                            
+                                            # Show tool output (truncated for readability)
+                                            if observation:
+                                                with st.container():
+                                                    st.write("*Tool output:*")
+                                                    # Truncate long outputs
+                                                    if len(str(observation)) > 500:
+                                                        truncated_output = str(observation)[:500] + "... (truncated)"
+                                                        st.text_area("", value=truncated_output, height=100, key=f"debug_output_{i}", disabled=True)
+                                                    else:
+                                                        st.text_area("", value=str(observation), height=100, key=f"debug_output_{i}", disabled=True)
+                                            
+                                            if i < len(result["intermediate_steps"]) - 1:
+                                                st.divider()
                                     
-                                    st.markdown("### Document sources used in this response:")
-                                    for source, count in sorted(sources_used.items()):
-                                        st.markdown(f"- **{source}** ({count} chunks)")
+                                    # Show available data sources summary
+                                    st.write("### 📊 Available Data Sources:")
+                                    col1, col2 = st.columns(2)
                                     
-                                    if st.session_state.show_debug:
-                                        st.divider()
-                                        st.write("### Query Debug Info")
-                                        if "last_query_debug" in st.session_state:
-                                            debug = st.session_state["last_query_debug"]
-                                            st.write(f"Query: '{debug['query']}'")
-                                            st.write(f"Total chunks found: {debug['found_contexts']}")
-                                            st.write(f"Selected sources: {', '.join(debug['selected_sources']) if debug['selected_sources'] else 'All sources'}")
-                                            # Don't show raw metadata as it might contain sensitive information
+                                    with col1:
+                                        if has_documents:
+                                            num_docs = len(st.session_state.get('selected_doc_sources', []))
+                                            st.metric("Text Documents", num_docs)
+                                            if num_docs > 0:
+                                                # Load document metadata to show titles
+                                                persist_directory = './chroma_db'
+                                                document_metadata = lib.load_document_metadata(persist_directory)
+                                                if document_metadata:
+                                                    doc_titles = [doc_data.get('title', 'Unknown') for doc_data in document_metadata.values()]
+                                                    st.write("*Document titles:*")
+                                                    for title in doc_titles[:3]:  # Show first 3
+                                                        st.write(f"• {title}")
+                                                    if len(doc_titles) > 3:
+                                                        st.write(f"• ... and {len(doc_titles) - 3} more")
+                                        else:
+                                            st.metric("Text Documents", 0)
+                                    
+                                    with col2:
+                                        if has_datasets:
+                                            dataset_names = list(st.session_state.get('tabular_datasets', {}).keys())
+                                            st.metric("Tabular Datasets", len(dataset_names))
+                                            if dataset_names:
+                                                st.write("*Dataset names:*")
+                                                for name in dataset_names[:3]:  # Show first 3
+                                                    st.write(f"• {name}")
+                                                if len(dataset_names) > 3:
+                                                    st.write(f"• ... and {len(dataset_names) - 3} more")
+                                        else:
+                                            st.metric("Tabular Datasets", 0)
+                                    
+                                    # Show execution metadata
+                                    st.write("### ⚙️ Execution Metadata:")
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("Total Steps", len(result.get("intermediate_steps", [])))
+                                    with col2:
+                                        st.metric("Model Used", st.session_state.get("openai_model", "Unknown"))
+                                    with col3:
+                                        # Calculate approximate token usage (rough estimate)
+                                        total_chars = len(prompt) + len(response)
+                                        approx_tokens = total_chars // 4  # Rough estimate: 4 chars per token
+                                        st.metric("Est. Tokens", f"~{approx_tokens}")
                             
                             # Add assistant response to chat history
                             st.session_state.messages.append({"role": "assistant", "content": response})
+                        else:
+                            # Fallback if agent creation fails
+                            error = "Agent creation failed. Please check your configuration."
+                            st.error(error)
+                            st.session_state.messages.append({"role": "assistant", "content": error})
                     else:
-                        # Fallback to traditional approach when RAG is not available
-                        # Stream the response for a better user experience
-                        # Create messages list with system message and all existing messages
+                        # Fallback to basic approach if tools not available
+                        st.warning("Advanced tool-calling is not available. Using basic chat mode.")
+                        
+                        # Create basic chat response
                         messages = [
                             {"role": "system", "content": "You are a helpful assistant. Answer questions based on your knowledge."}
                         ]
