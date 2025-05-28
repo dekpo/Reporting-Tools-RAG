@@ -1583,6 +1583,11 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         return "No tabular datasets are currently loaded."
     
     try:
+        # Debug: Log function entry
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: Creating {chart_type} chart")
+            st.write(f"🔧 DEBUG: Available datasets: {list(available_datasets.keys())}")
+        
         # Select dataset
         if dataset_name and dataset_name in available_datasets:
             df = available_datasets[dataset_name]
@@ -1590,61 +1595,72 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
             dataset_name = list(available_datasets.keys())[0]
             df = available_datasets[dataset_name]
         
+        # Debug: Log dataset info
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: Using dataset '{dataset_name}' with shape {df.shape}")
+            st.write(f"🔧 DEBUG: Columns: {list(df.columns)}")
+        
         # Set default title
         if not title:
             title = f"{chart_type.title()} Chart - {dataset_name}"
         
-        # Create the visualization based on chart type
+        # Validate chart requirements and prepare data
+        chart_data = None
+        
         if chart_type.lower() == "bar":
             if not x_column or not y_column:
                 return "Bar chart requires both x_column and y_column parameters."
-            fig = px.bar(df, x=x_column, y=y_column, title=title)
+            chart_data = df[[x_column, y_column]].copy()
             
         elif chart_type.lower() == "line":
             if not x_column or not y_column:
                 return "Line chart requires both x_column and y_column parameters."
-            fig = px.line(df, x=x_column, y=y_column, title=title)
+            chart_data = df[[x_column, y_column]].copy()
             
         elif chart_type.lower() == "scatter":
             if not x_column or not y_column:
                 return "Scatter plot requires both x_column and y_column parameters."
-            fig = px.scatter(df, x=x_column, y=y_column, title=title)
+            chart_data = df[[x_column, y_column]].copy()
             
         elif chart_type.lower() == "histogram":
             if not x_column:
                 return "Histogram requires x_column parameter."
-            fig = px.histogram(df, x=x_column, title=title)
+            chart_data = df[[x_column]].copy()
             
         elif chart_type.lower() == "pie":
             if not x_column:
                 return "Pie chart requires x_column parameter for categories."
             # For pie charts, we need to aggregate data if y_column is provided
             if y_column:
-                pie_data = df.groupby(x_column)[y_column].sum().reset_index()
-                fig = px.pie(pie_data, values=y_column, names=x_column, title=title)
+                chart_data = df.groupby(x_column)[y_column].sum().reset_index()
             else:
                 # Use value counts for categorical data
-                pie_data = df[x_column].value_counts().reset_index()
-                fig = px.pie(pie_data, values='count', names=x_column, title=title)
+                chart_data = df[x_column].value_counts().reset_index()
+                chart_data.columns = [x_column, 'count']
+                y_column = 'count'  # Set y_column for pie chart
             
         elif chart_type.lower() == "box":
             if not y_column:
                 return "Box plot requires y_column parameter."
             if x_column:
-                fig = px.box(df, x=x_column, y=y_column, title=title)
+                chart_data = df[[x_column, y_column]].copy()
             else:
-                fig = px.box(df, y=y_column, title=title)
+                chart_data = df[[y_column]].copy()
             
         elif chart_type.lower() == "heatmap":
             # Create correlation heatmap for numeric columns
             numeric_cols = df.select_dtypes(include=['number']).columns
             if len(numeric_cols) < 2:
                 return "Heatmap requires at least 2 numeric columns."
-            corr_matrix = df[numeric_cols].corr()
-            fig = px.imshow(corr_matrix, text_auto=True, title=title)
+            chart_data = df[numeric_cols].corr()
             
         else:
             return f"Unsupported chart type: {chart_type}. Supported types: bar, line, scatter, histogram, pie, box, heatmap"
+        
+        # Debug: Log chart data info
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: Chart data shape: {chart_data.shape}")
+            st.write(f"🔧 DEBUG: Chart data columns: {list(chart_data.columns)}")
         
         # Initialize charts storage if it doesn't exist
         if "stored_charts" not in st.session_state:
@@ -1653,8 +1669,25 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         # Generate a unique chart ID based on current message count
         chart_id = f"chart_{len(st.session_state.get('messages', []))}"
         
-        # Store the figure with the chart ID
-        st.session_state.stored_charts[chart_id] = fig
+        # Store chart configuration instead of the figure object
+        chart_config = {
+            "chart_type": chart_type.lower(),
+            "dataset_name": dataset_name,
+            "x_column": x_column,
+            "y_column": y_column,
+            "title": title,
+            "data": chart_data.to_dict('records') if hasattr(chart_data, 'to_dict') else chart_data.to_dict(),
+            "columns": list(chart_data.columns) if hasattr(chart_data, 'columns') else None
+        }
+        
+        # Debug: Log chart config
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: Chart ID: {chart_id}")
+            st.write(f"🔧 DEBUG: Chart config keys: {list(chart_config.keys())}")
+            st.write(f"🔧 DEBUG: Data type: {type(chart_config['data'])}")
+        
+        # Store the chart configuration
+        st.session_state.stored_charts[chart_id] = chart_config
         
         # Store the current chart ID for immediate display
         st.session_state.current_chart_id = chart_id
@@ -1672,7 +1705,148 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         return chart_description
         
     except Exception as e:
-        return f"Error creating visualization: {str(e)}"
+        error_msg = f"Error creating visualization: {str(e)}"
+        if st.session_state.get("show_debug", False):
+            import traceback
+            st.write(f"🔧 DEBUG: Full error traceback:")
+            st.code(traceback.format_exc())
+        return error_msg
+
+def recreate_chart_from_config(chart_config):
+    """
+    Recreate a Plotly chart from stored configuration data.
+    
+    Args:
+        chart_config: Dictionary containing chart configuration
+        
+    Returns:
+        Plotly figure object or None if recreation fails
+    """
+    try:
+        import pandas as pd
+        
+        # Debug: Log recreation attempt
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: Recreating chart from config")
+            st.write(f"🔧 DEBUG: Config keys: {list(chart_config.keys()) if chart_config else 'None'}")
+        
+        # Validate chart config
+        if not chart_config or not isinstance(chart_config, dict):
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: Invalid chart config: {chart_config}")
+            return None
+            
+        # Extract configuration
+        chart_type = chart_config.get("chart_type")
+        title = chart_config.get("title", "Chart")
+        x_column = chart_config.get("x_column")
+        y_column = chart_config.get("y_column")
+        data = chart_config.get("data")
+        columns = chart_config.get("columns")
+        
+        # Debug: Log extracted config
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: Chart type: {chart_type}")
+            st.write(f"🔧 DEBUG: X column: {x_column}")
+            st.write(f"🔧 DEBUG: Y column: {y_column}")
+            st.write(f"🔧 DEBUG: Data type: {type(data)}")
+            st.write(f"🔧 DEBUG: Columns: {columns}")
+        
+        if not chart_type or not data:
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: Missing chart_type or data")
+            return None
+        
+        # Recreate DataFrame from stored data
+        try:
+            if columns and isinstance(data, list):
+                # Regular DataFrame from records
+                df = pd.DataFrame(data)
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: Created DataFrame from records, shape: {df.shape}")
+            elif isinstance(data, dict):
+                # For correlation matrices (heatmaps) or other dict-based data
+                df = pd.DataFrame(data)
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: Created DataFrame from dict, shape: {df.shape}")
+            else:
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: Unsupported data format")
+                return None
+        except Exception as df_error:
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: DataFrame creation error: {df_error}")
+            st.error(f"Error recreating DataFrame: {df_error}")
+            return None
+        
+        # Validate that required columns exist
+        if chart_type in ["bar", "line", "scatter"] and (not x_column or not y_column):
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: Missing required columns for {chart_type}")
+            return None
+        if chart_type in ["histogram", "pie"] and not x_column:
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: Missing x_column for {chart_type}")
+            return None
+        if chart_type == "box" and not y_column:
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: Missing y_column for box plot")
+            return None
+            
+        # Check if required columns exist in the DataFrame
+        if chart_type != "heatmap":  # Heatmap uses correlation matrix, different structure
+            if x_column and x_column not in df.columns:
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: x_column '{x_column}' not in DataFrame columns: {list(df.columns)}")
+                return None
+            if y_column and y_column not in df.columns:
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: y_column '{y_column}' not in DataFrame columns: {list(df.columns)}")
+                return None
+        
+        # Debug: Log before chart creation
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: About to create {chart_type} chart")
+        
+        # Recreate the chart based on type
+        if chart_type == "bar":
+            fig = px.bar(df, x=x_column, y=y_column, title=title)
+        elif chart_type == "line":
+            fig = px.line(df, x=x_column, y=y_column, title=title)
+        elif chart_type == "scatter":
+            fig = px.scatter(df, x=x_column, y=y_column, title=title)
+        elif chart_type == "histogram":
+            fig = px.histogram(df, x=x_column, title=title)
+        elif chart_type == "pie":
+            fig = px.pie(df, values=y_column, names=x_column, title=title)
+        elif chart_type == "box":
+            if x_column and x_column in df.columns:
+                fig = px.box(df, x=x_column, y=y_column, title=title)
+            else:
+                fig = px.box(df, y=y_column, title=title)
+        elif chart_type == "heatmap":
+            fig = px.imshow(df, text_auto=True, title=title)
+        else:
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: Unsupported chart type: {chart_type}")
+            return None
+        
+        # Debug: Log successful creation
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: Chart created successfully!")
+            
+        return fig
+        
+    except Exception as e:
+        # Show error in debug mode or always for debugging this issue
+        error_msg = f"Error recreating chart: {e}"
+        if st.session_state.get("show_debug", False):
+            import traceback
+            st.write(f"🔧 DEBUG: Chart recreation error: {error_msg}")
+            st.code(traceback.format_exc())
+        else:
+            st.error(error_msg)  # Show error even without debug mode for now
+        return None
 
 def create_unified_agent():
     """
@@ -1713,18 +1887,26 @@ Current session contains:
 - Text Documents: {num_documents} documents available for search
 - Tabular Datasets: {num_datasets} datasets available for analysis
 
+IMPORTANT GUIDELINES:
+1. Be efficient with tool usage - avoid unnecessary tool calls
+2. For chart requests, you can often create visualizations directly without calling get_data_summary first
+3. Only use get_data_summary if you need to understand the data structure
+4. For simple questions, use the most direct tool approach
+5. Always provide clear, helpful responses even if you hit iteration limits
+
 When users ask questions:
 1. Determine if they need document search, data analysis, or both
-2. Use the appropriate tools to gather information
-3. Provide comprehensive answers that combine insights from all relevant sources
-4. If a query could benefit from both text and data analysis, use cross_reference_analysis
+2. Use the most direct tool approach - avoid redundant calls
+3. For chart requests: if you know the dataset exists, go straight to create_visualization
+4. Provide comprehensive answers that combine insights from all relevant sources
 5. Always cite your sources and be specific about which documents or datasets you're referencing
 
-Guidelines:
+Tool Selection Guidelines:
 - For questions about trends, statistics, or numerical analysis: use analyze_tabular_data
+- For chart/visualization requests: use create_visualization directly
 - For questions about content, discussions, or qualitative information: use search_documents  
 - For questions that need both perspectives: use cross_reference_analysis
-- If unsure about available data: use get_data_summary first
+- Only use get_data_summary when you need to understand data structure first
 """),
         ("user", "{input}"),
         ("assistant", "{agent_scratchpad}")
@@ -1749,7 +1931,7 @@ Guidelines:
         tools=tools,
         verbose=debug_mode,  # Only verbose in terminal when debug is on
         handle_parsing_errors=True,
-        max_iterations=3,  # Prevent infinite loops
+        max_iterations=5,  # Increased from 3 to allow more complex operations
         return_intermediate_steps=True  # Capture steps for UI display
     )
     

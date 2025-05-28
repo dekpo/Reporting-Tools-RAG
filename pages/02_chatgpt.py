@@ -618,8 +618,32 @@ else:
                             # Check if a chart was created and display it
                             if "current_chart_id" in st.session_state and st.session_state.current_chart_id is not None:
                                 chart_id = st.session_state.current_chart_id
+                                if st.session_state.get("show_debug", False):
+                                    st.write(f"🔧 DEBUG: Found current_chart_id: {chart_id}")
+                                    st.write(f"🔧 DEBUG: Stored charts keys: {list(st.session_state.get('stored_charts', {}).keys())}")
+                                
                                 if chart_id in st.session_state.get("stored_charts", {}):
-                                    st.plotly_chart(st.session_state.stored_charts[chart_id], use_container_width=True)
+                                    chart_config = st.session_state.stored_charts[chart_id]
+                                    if st.session_state.get("show_debug", False):
+                                        st.write(f"🔧 DEBUG: About to recreate chart with config: {chart_config}")
+                                    
+                                    fig = lib.recreate_chart_from_config(chart_config)
+                                    if fig is not None:
+                                        if st.session_state.get("show_debug", False):
+                                            st.write(f"🔧 DEBUG: Chart recreation successful, displaying chart")
+                                        st.plotly_chart(fig, use_container_width=True)
+                                        
+                                        # Append chart ID to response for persistence in chat history
+                                        response += f"\n\n[CHART_ID:{chart_id}]"
+                                    else:
+                                        # Show fallback message if chart recreation failed
+                                        st.warning("⚠️ Chart could not be displayed. The chart data may be corrupted or incompatible with the current session.")
+                                        if st.session_state.get("show_debug", False):
+                                            st.write("**Debug Info:** Chart config:", chart_config)
+                                else:
+                                    if st.session_state.get("show_debug", False):
+                                        st.write(f"🔧 DEBUG: Chart ID {chart_id} not found in stored_charts")
+                                
                                 # Clear the current chart ID after displaying
                                 st.session_state.current_chart_id = None
                             
@@ -775,6 +799,13 @@ else:
             import re
             chart_match = re.search(r'\[CHART_ID:(chart_\d+)\]', message_content)
             
+            if st.session_state.get("show_debug", False):
+                st.write(f"🔧 DEBUG: Checking message for chart ID: {message_content[:100]}...")
+                if chart_match:
+                    st.write(f"🔧 DEBUG: Found chart ID in message: {chart_match.group(1)}")
+                else:
+                    st.write(f"🔧 DEBUG: No chart ID found in message")
+            
             if chart_match and message["role"] == "assistant":
                 # Remove the chart ID from the displayed message
                 display_content = re.sub(r'\[CHART_ID:chart_\d+\]', '', message_content)
@@ -782,8 +813,28 @@ else:
                 
                 # Display the chart if it exists in stored charts
                 chart_id = chart_match.group(1)
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: Looking for chart ID: {chart_id}")
+                    st.write(f"🔧 DEBUG: Available chart IDs: {list(st.session_state.get('stored_charts', {}).keys())}")
+                
                 if chart_id in st.session_state.get("stored_charts", {}):
-                    st.plotly_chart(st.session_state.stored_charts[chart_id], use_container_width=True)
+                    chart_config = st.session_state.stored_charts[chart_id]
+                    if st.session_state.get("show_debug", False):
+                        st.write(f"🔧 DEBUG: Found chart config, recreating chart")
+                    
+                    fig = lib.recreate_chart_from_config(chart_config)
+                    if fig is not None:
+                        if st.session_state.get("show_debug", False):
+                            st.write(f"🔧 DEBUG: Chart recreation successful for history display")
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        # Show fallback message if chart recreation failed
+                        st.warning("⚠️ Chart could not be displayed. The chart data may be corrupted or incompatible with the current session.")
+                        if st.session_state.get("show_debug", False):
+                            st.write("**Debug Info:** Chart config:", chart_config)
+                else:
+                    if st.session_state.get("show_debug", False):
+                        st.write(f"🔧 DEBUG: Chart ID {chart_id} not found in stored charts")
             else:
                 # Display normal message
                 st.markdown(message_content)
