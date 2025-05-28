@@ -17,5 +17,9 @@ langchain-experimental
 langchain-openai
 openpyxl
 tabulate
+# Visualization libraries for chart generation
+matplotlib
+seaborn
+plotly
 # Additional needed packages
 typing-extensions

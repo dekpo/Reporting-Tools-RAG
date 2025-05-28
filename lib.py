@@ -9,6 +9,17 @@ import json
 import hashlib
 import shutil
 
+# For visualization capabilities
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import plotly.express as px
+    import plotly.graph_objects as go
+    VISUALIZATION_AVAILABLE = True
+except ImportError:
+    VISUALIZATION_AVAILABLE = False
+    st.warning("Visualization libraries not available. Install with: pip install matplotlib seaborn plotly")
+
 # For RAG functionality - wrapped in try/except to handle missing dependencies
 RAG_AVAILABLE = True
 try:
@@ -1548,6 +1559,101 @@ def get_data_summary(dataset_name: str = None) -> str:
     except Exception as e:
         return f"Error getting data summary: {str(e)}"
 
+@tool
+def create_visualization(chart_type: str, dataset_name: str = None, x_column: str = None, y_column: str = None, title: str = None) -> str:
+    """
+    Create charts and visualizations from tabular data.
+    
+    Args:
+        chart_type: Type of chart to create (bar, line, scatter, histogram, pie, heatmap, box)
+        dataset_name: Name of the dataset to visualize (if not provided, uses first available)
+        x_column: Column name for x-axis (required for most chart types)
+        y_column: Column name for y-axis (required for some chart types)
+        title: Optional title for the chart
+    
+    Returns:
+        Status message about chart creation
+    """
+    if not VISUALIZATION_AVAILABLE:
+        return "Visualization libraries are not available. Please install matplotlib, seaborn, and plotly."
+    
+    available_datasets = st.session_state.get("tabular_datasets", {})
+    
+    if not available_datasets:
+        return "No tabular datasets are currently loaded."
+    
+    try:
+        # Select dataset
+        if dataset_name and dataset_name in available_datasets:
+            df = available_datasets[dataset_name]
+        else:
+            dataset_name = list(available_datasets.keys())[0]
+            df = available_datasets[dataset_name]
+        
+        # Set default title
+        if not title:
+            title = f"{chart_type.title()} Chart - {dataset_name}"
+        
+        # Create the visualization based on chart type
+        if chart_type.lower() == "bar":
+            if not x_column or not y_column:
+                return "Bar chart requires both x_column and y_column parameters."
+            fig = px.bar(df, x=x_column, y=y_column, title=title)
+            
+        elif chart_type.lower() == "line":
+            if not x_column or not y_column:
+                return "Line chart requires both x_column and y_column parameters."
+            fig = px.line(df, x=x_column, y=y_column, title=title)
+            
+        elif chart_type.lower() == "scatter":
+            if not x_column or not y_column:
+                return "Scatter plot requires both x_column and y_column parameters."
+            fig = px.scatter(df, x=x_column, y=y_column, title=title)
+            
+        elif chart_type.lower() == "histogram":
+            if not x_column:
+                return "Histogram requires x_column parameter."
+            fig = px.histogram(df, x=x_column, title=title)
+            
+        elif chart_type.lower() == "pie":
+            if not x_column:
+                return "Pie chart requires x_column parameter for categories."
+            # For pie charts, we need to aggregate data if y_column is provided
+            if y_column:
+                pie_data = df.groupby(x_column)[y_column].sum().reset_index()
+                fig = px.pie(pie_data, values=y_column, names=x_column, title=title)
+            else:
+                # Use value counts for categorical data
+                pie_data = df[x_column].value_counts().reset_index()
+                fig = px.pie(pie_data, values='count', names=x_column, title=title)
+            
+        elif chart_type.lower() == "box":
+            if not y_column:
+                return "Box plot requires y_column parameter."
+            if x_column:
+                fig = px.box(df, x=x_column, y=y_column, title=title)
+            else:
+                fig = px.box(df, y=y_column, title=title)
+            
+        elif chart_type.lower() == "heatmap":
+            # Create correlation heatmap for numeric columns
+            numeric_cols = df.select_dtypes(include=['number']).columns
+            if len(numeric_cols) < 2:
+                return "Heatmap requires at least 2 numeric columns."
+            corr_matrix = df[numeric_cols].corr()
+            fig = px.imshow(corr_matrix, text_auto=True, title=title)
+            
+        else:
+            return f"Unsupported chart type: {chart_type}. Supported types: bar, line, scatter, histogram, pie, box, heatmap"
+        
+        # Display the chart in Streamlit
+        st.plotly_chart(fig, use_container_width=True)
+        
+        return f"Successfully created {chart_type} chart for dataset '{dataset_name}'. Chart is displayed above."
+        
+    except Exception as e:
+        return f"Error creating visualization: {str(e)}"
+
 def create_unified_agent():
     """
     Create a unified agent that can work with both text documents and tabular data.
@@ -1564,7 +1670,8 @@ def create_unified_agent():
         search_documents,
         analyze_tabular_data,
         cross_reference_analysis,
-        get_data_summary
+        get_data_summary,
+        create_visualization
     ]
     
     # Count available data sources
@@ -1580,6 +1687,7 @@ Available capabilities:
 - analyze_tabular_data: Perform analysis on CSV/Excel data using pandas operations
 - cross_reference_analysis: Find connections between documents and data
 - get_data_summary: Get overview information about available datasets
+- create_visualization: Generate charts and graphs from tabular data (bar, line, scatter, histogram, pie, box, heatmap)
 
 Current session contains:
 - Text Documents: {num_documents} documents available for search
