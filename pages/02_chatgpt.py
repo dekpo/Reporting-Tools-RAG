@@ -615,6 +615,14 @@ else:
                             # Display the response
                             st.markdown(response)
                             
+                            # Check if a chart was created and display it
+                            if "current_chart_id" in st.session_state and st.session_state.current_chart_id is not None:
+                                chart_id = st.session_state.current_chart_id
+                                if chart_id in st.session_state.get("stored_charts", {}):
+                                    st.plotly_chart(st.session_state.stored_charts[chart_id], use_container_width=True)
+                                # Clear the current chart ID after displaying
+                                st.session_state.current_chart_id = None
+                            
                             # Show debug information if enabled
                             if st.session_state.get("show_debug", False):
                                 with st.expander("🔍 Agent Execution Details (Debug Mode)", expanded=False):
@@ -760,7 +768,25 @@ else:
     # Display chat messages from history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            # Display the message content
+            message_content = message["content"]
+            
+            # Check if this message contains a chart ID
+            import re
+            chart_match = re.search(r'\[CHART_ID:(chart_\d+)\]', message_content)
+            
+            if chart_match and message["role"] == "assistant":
+                # Remove the chart ID from the displayed message
+                display_content = re.sub(r'\[CHART_ID:chart_\d+\]', '', message_content)
+                st.markdown(display_content)
+                
+                # Display the chart if it exists in stored charts
+                chart_id = chart_match.group(1)
+                if chart_id in st.session_state.get("stored_charts", {}):
+                    st.plotly_chart(st.session_state.stored_charts[chart_id], use_container_width=True)
+            else:
+                # Display normal message
+                st.markdown(message_content)
     
     # Document management interface - ALWAYS PLACED AT THE END
     # Debug info to check why buttons might not be showing
@@ -830,6 +856,11 @@ else:
             # Clear conversation - More compact
             if st.button("Clear Chat", use_container_width=True):
                 st.session_state.messages = []
+                # Also clear stored charts to free up memory
+                if "stored_charts" in st.session_state:
+                    st.session_state.stored_charts = {}
+                if "current_chart_id" in st.session_state:
+                    st.session_state.current_chart_id = None
                 st.rerun()
         
         with col4:

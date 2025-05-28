@@ -56,7 +56,7 @@ from datetime import datetime
 import random
 
 APP_TITLE = "UN CEB - :book: Reporting Tools"
-APP_VERSION = "2.0"
+APP_VERSION = "2.5"
 
 def local_css(file_name):
     with open(file_name) as f:
@@ -1646,10 +1646,30 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         else:
             return f"Unsupported chart type: {chart_type}. Supported types: bar, line, scatter, histogram, pie, box, heatmap"
         
-        # Display the chart in Streamlit
-        st.plotly_chart(fig, use_container_width=True)
+        # Initialize charts storage if it doesn't exist
+        if "stored_charts" not in st.session_state:
+            st.session_state.stored_charts = {}
         
-        return f"Successfully created {chart_type} chart for dataset '{dataset_name}'. Chart is displayed above."
+        # Generate a unique chart ID based on current message count
+        chart_id = f"chart_{len(st.session_state.get('messages', []))}"
+        
+        # Store the figure with the chart ID
+        st.session_state.stored_charts[chart_id] = fig
+        
+        # Store the current chart ID for immediate display
+        st.session_state.current_chart_id = chart_id
+        
+        # Create a descriptive message about the chart with the chart ID embedded
+        chart_description = f"📊 **{chart_type.title()} Chart Created: {title}**\n\n"
+        chart_description += f"**Dataset:** {dataset_name}\n"
+        if x_column:
+            chart_description += f"**X-axis:** {x_column}\n"
+        if y_column:
+            chart_description += f"**Y-axis:** {y_column}\n"
+        chart_description += f"**Chart Type:** {chart_type.title()}\n\n"
+        chart_description += f"[CHART_ID:{chart_id}]"  # Hidden marker for chart identification
+        
+        return chart_description
         
     except Exception as e:
         return f"Error creating visualization: {str(e)}"
