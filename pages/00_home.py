@@ -33,6 +33,23 @@ def generate_file_hash(file_content, file_name, file_type):
     content_str = f"{file_name}_{file_type}_{len(file_content)}"
     return hashlib.md5(content_str.encode()).hexdigest()
 
+# Helper function to clean filename for subject
+def clean_filename_for_subject(filename):
+    """Clean filename to create a nice subject title"""
+    if not filename:
+        return "Your Subject"
+    
+    # Remove file extension
+    name_without_ext = os.path.splitext(filename)[0]
+    
+    # Replace special characters with spaces
+    cleaned = re.sub(r'[_\-\.]+', ' ', name_without_ext)
+    
+    # Remove extra spaces and apply title case
+    cleaned = ' '.join(cleaned.split()).title()
+    
+    return cleaned if cleaned else "Your Subject"
+
 # Helper function to extract content from VTT files
 @st.cache_data
 def extract_vtt_content(file_content, file_hash):
@@ -241,10 +258,6 @@ st.markdown("<p>Welcome to this set of tools! Upload your document, anonymize co
 st.header("Upload Your Document")
 
 st.markdown("<p>Upload a transcript (.docx or .vtt file), text document (.docx or .pdf), or data file (.csv or .xlsx) to begin processing.</p>", unsafe_allow_html=True)
-
-# Subject input (mandatory)
-default_title = "Your Subject"
-title_input = st.text_input("**Subject*** (mandatory)", default_title, help="What is the subject of your document?")
 
 # Initialize session state for file type if not already set
 if 'file_type' not in st.session_state:
@@ -458,6 +471,18 @@ elif st.session_state.file_type == "excel":
             st.session_state.tabular_datasets[f"temp_{uploaded_file.name}"] = df
         else:
             st.warning("**Sorry there was an error processing this Excel file.**", icon="⚠️")
+
+# Subject input (mandatory) - positioned after file upload with auto-population
+default_title = "Your Subject"
+auto_title = default_title
+
+# Auto-populate subject from uploaded filename if available
+if 'uploaded_file' in locals() and uploaded_file is not None:
+    auto_title = clean_filename_for_subject(uploaded_file.name)
+
+title_input = st.text_input("**Subject*** (mandatory)", 
+                           value=auto_title, 
+                           help="What is the subject of your document? (Auto-filled from filename)")
 
 # Text area for manual input or displaying extracted content (only for text files)
 text_area = ""
