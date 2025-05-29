@@ -602,6 +602,169 @@ else:
         
         st.info(f"Ready to analyze: {', '.join(available_sources)}")
 
+    # Prompt Assistance Section - Added before chat input
+    st.divider()
+    with st.expander("💡 Prompt Assistant & Templates", expanded=False):
+        st.markdown("**Get help crafting better prompts for optimal results**")
+        
+        # Quick template buttons based on available data
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📊 Text Analysis Templates")
+            if st.button("📋 Meeting Report", use_container_width=True, key="meeting_report_template"):
+                template = """Analyze this transcript and create a professional report with the following structure:
+
+**Executive Summary:** Key outcomes and decisions in 2-3 sentences
+**Discussion Points:** Main topics covered, organized thematically  
+**Decisions Made:** Clear list of what was agreed upon
+**Action Items:** Who needs to do what by when
+**Next Steps:** Follow-up meetings and timelines
+
+Please write in a formal, professional tone suitable for organizational reporting."""
+                st.session_state.prompt_template = template
+                st.success("✅ Template loaded! Scroll down to use it.")
+            
+            if st.button("⚡ Quick Summary", use_container_width=True, key="quick_summary_template"):
+                template = """Provide a concise 3-paragraph summary:
+
+**Paragraph 1:** What was the main focus and key topics discussed?
+**Paragraph 2:** What were the primary conclusions, decisions, or findings?
+**Paragraph 3:** What are the next steps, recommendations, or actions required?
+
+Keep each paragraph to 3-4 sentences maximum."""
+                st.session_state.prompt_template = template
+                st.success("✅ Template loaded! Scroll down to use it.")
+            
+            if st.button("🎯 Action Items", use_container_width=True, key="action_items_template"):
+                template = """Extract all actionable elements from this content:
+
+**Immediate Actions:** Tasks that need to be done within 1-2 weeks
+**Medium-term Actions:** Tasks for the next 1-3 months  
+**Long-term Commitments:** Strategic actions beyond 3 months
+**Responsible Parties:** Who is accountable for each action
+**Dependencies:** What needs to happen before each action can proceed
+
+Format as a clear action plan with timelines."""
+                st.session_state.prompt_template = template
+                st.success("✅ Template loaded! Scroll down to use it.")
+        
+        with col2:
+            st.markdown("#### 📈 Data Analysis Templates")
+            if st.button("📊 Data Overview", use_container_width=True, key="data_overview_template"):
+                template = """Analyze this dataset and provide:
+
+**Data Structure:** Number of rows, columns, data types
+**Key Statistics:** Summary statistics for numerical columns
+**Data Quality:** Missing values, outliers, inconsistencies  
+**Initial Insights:** 3-5 interesting patterns or findings
+**Recommended Visualizations:** What charts would best show this data
+
+Please be specific about column names and values you observe."""
+                st.session_state.prompt_template = template
+                st.success("✅ Template loaded! Scroll down to use it.")
+            
+            if st.button("📈 Create Charts", use_container_width=True, key="create_charts_template"):
+                template = """Create visualizations for this data:
+
+1. Show me the top 10 [categories] by [metric] in a bar chart
+2. Create a line chart showing [metric] trends over time
+3. Generate a pie chart of [category] distribution
+4. Include appropriate titles and labels
+
+Replace [categories] and [metric] with actual column names from the data."""
+                st.session_state.prompt_template = template
+                st.success("✅ Template loaded! Scroll down to use it.")
+            
+            if st.button("🔍 Compare & Analyze", use_container_width=True, key="compare_template"):
+                template = """Compare and analyze this data:
+
+**Key Differences:** How do different groups/regions compare?
+**Performance Ranking:** Which performs better and in what areas?
+**Trends & Patterns:** What notable changes or patterns exist?
+**Correlations:** What relationships exist between variables?
+**Visualizations:** Create charts highlighting the comparisons
+
+Provide insights and recommendations based on findings."""
+                st.session_state.prompt_template = template
+                st.success("✅ Template loaded! Scroll down to use it.")
+        
+        # Smart suggestions based on available data types
+        st.markdown("---")
+        st.markdown("#### 🤖 Smart Suggestions")
+        
+        suggestions = []
+        if has_documents and has_datasets:
+            suggestions = [
+                "🔗 **Cross-reference analysis:** 'Compare the meeting decisions with the budget data to identify alignment'",
+                "📊 **Document + Data insights:** 'Summarize the key points from the meeting and show relevant charts from the funding data'",
+                "🎯 **Actionable insights:** 'Based on the discussion and data trends, what are the top 3 recommendations?'"
+            ]
+        elif has_documents:
+            suggestions = [
+                "📝 **Document summarization:** 'Create an executive summary of the main points discussed'",
+                "🔍 **Key insights:** 'What are the most important decisions and action items?'",
+                "📋 **Thematic analysis:** 'Organize the content by main themes and provide insights for each'"
+            ]
+        elif has_datasets:
+            suggestions = [
+                "📊 **Data exploration:** 'Show me an overview of this dataset with key statistics'",
+                "📈 **Trend analysis:** 'Create charts showing the most important trends in this data'",
+                "🎯 **Top insights:** 'What are the 5 most interesting patterns in this data?'"
+            ]
+        
+        if suggestions:
+            for suggestion in suggestions:
+                st.markdown(suggestion)
+        
+        # Quick tips
+        st.markdown("---")
+        st.markdown("#### 💡 Quick Tips for Better Results")
+        tips_col1, tips_col2 = st.columns(2)
+        
+        with tips_col1:
+            st.markdown("""
+            **✅ Do:**
+            • Be specific about what you want
+            • Mention exact column names for data
+            • Request specific chart types
+            • Ask for structured outputs
+            • Break complex requests into steps
+            """)
+        
+        with tips_col2:
+            st.markdown("""
+            **❌ Avoid:**
+            • Vague questions like "analyze this"
+            • Very long, complex requests
+            • Asking for impossible analysis
+            • Unclear output requirements
+            • Too many questions at once
+            """)
+        
+        # Template input area (if template was selected)
+        if "prompt_template" in st.session_state:
+            st.markdown("---")
+            st.markdown("#### ✏️ Edit Your Template")
+            st.text_area(
+                "Customize the template below, then copy it to the chat:",
+                value=st.session_state.prompt_template,
+                height=150,
+                key="editable_template",
+                help="Edit this template to fit your specific needs, then copy and paste it into the chat input below."
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📋 Copy Template", use_container_width=True):
+                    # Note: In Streamlit we can't directly copy to clipboard, but we can help user copy
+                    st.info("💡 Select all text above and copy (Ctrl+C / Cmd+C) to use in chat below")
+            with col2:
+                if st.button("🗑️ Clear Template", use_container_width=True):
+                    if "prompt_template" in st.session_state:
+                        del st.session_state.prompt_template
+                    st.rerun()
+
     # Chat input for user questions - UNIFIED AGENT APPROACH
     if prompt := st.chat_input("Ask questions about your documents and data", max_chars=8000):
         # Add user message to chat history
@@ -673,7 +836,7 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                                     if fig is not None:
                                         if st.session_state.get("show_debug", False):
                                             st.write(f"🔧 DEBUG: Chart recreation successful, displaying chart")
-                                        st.plotly_chart(fig, use_container_width=True)
+                                        st.plotly_chart(fig, use_container_width=True, key=f"current_chart_{chart_id}")
                                         
                                         # Append chart ID to response for persistence in chat history
                                         response += f"\n\n[CHART_ID:{chart_id}]"
@@ -868,7 +1031,7 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                     if fig is not None:
                         if st.session_state.get("show_debug", False):
                             st.write(f"🔧 DEBUG: Chart recreation successful for history display")
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, use_container_width=True, key=f"history_chart_{chart_id}")
                     else:
                         # Show fallback message if chart recreation failed
                         st.warning("⚠️ Chart could not be displayed. The chart data may be corrupted or incompatible with the current session.")
@@ -993,3 +1156,52 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                     key="save_conversation_disabled",
                     help="Process a document first to enable this feature"
                 )
+
+def display_tabular_sources():
+    """Display available tabular data sources with management options"""
+    available_datasets = st.session_state.get("tabular_datasets", {})
+    
+    if available_datasets:
+        st.subheader("📊 Tabular Data Sources")
+        
+        # Add debug mode toggle
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"**{len(available_datasets)} dataset(s) available for analysis:**")
+        with col2:
+            debug_mode = st.checkbox("🔧 Debug Mode", 
+                                   value=st.session_state.get("show_debug", False),
+                                   help="Show detailed debugging information for chart generation")
+            st.session_state.show_debug = debug_mode
+        
+        # Display datasets in columns
+        cols = st.columns(min(len(available_datasets), 3))
+        for idx, (name, df) in enumerate(available_datasets.items()):
+            with cols[idx % 3]:
+                with st.expander(f"📊 {name}", expanded=False):
+                    st.write(f"**Rows:** {df.shape[0]:,}")
+                    st.write(f"**Columns:** {df.shape[1]}")
+                    st.write("**Column names:**")
+                    for col in df.columns:
+                        st.write(f"• {col}")
+                    
+                    # Show sample data
+                    st.write("**Sample data:**")
+                    st.dataframe(df.head(3), use_container_width=True)
+                    
+                    # Add data type info in debug mode
+                    if st.session_state.get("show_debug", False):
+                        st.write("**Data types:**")
+                        for col, dtype in df.dtypes.items():
+                            st.write(f"• {col}: {dtype}")
+        
+        st.markdown("---")
+        st.markdown("💡 **Tip:** Reference column names exactly as shown above when requesting specific charts.")
+        
+        # Clear data option
+        if st.button("🗑️ Clear All Tabular Data", type="secondary"):
+            st.session_state.tabular_datasets = {}
+            st.success("All tabular data cleared!")
+            st.rerun()
+    else:
+        st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to get started.")
