@@ -288,10 +288,23 @@ else:
         )
         st.session_state.show_debug = debug_enabled
         
+        # Add max iterations configuration
+        max_iterations = st.slider(
+            "Max Analysis Steps",
+            min_value=3,
+            max_value=20,
+            value=st.session_state.get("max_iterations", 10),
+            help="Maximum number of tool calls the AI agent can make per response. Higher values allow more complex analysis but may take longer."
+        )
+        st.session_state.max_iterations = max_iterations
+        
         if debug_enabled:
             st.info("🔍 Debug mode is **ON**. You'll see detailed execution information after each AI response.")
         else:
             st.info("🔍 Debug mode is **OFF**. Clean interface with no technical details shown.")
+        
+        # Show current configuration
+        st.caption(f"Current settings: Max steps = {max_iterations}, Debug = {'ON' if debug_enabled else 'OFF'}")
 
     # Document Source Selection - Moved below Advanced Settings
     if "vector_db" in st.session_state and st.session_state.vector_db is not None:
@@ -609,8 +622,37 @@ else:
                         
                         if agent_executor is not None:
                             # Execute the query using the unified agent
-                            result = agent_executor.invoke({"input": prompt})
-                            response = result["output"]
+                            try:
+                                result = agent_executor.invoke({"input": prompt})
+                                response = result["output"]
+                                
+                                # Check if the response indicates max iterations was reached
+                                max_iterations = st.session_state.get("max_iterations", 10)
+                                if "Agent stopped due to max iterations" in response or len(result.get("intermediate_steps", [])) >= max_iterations:
+                                    st.warning("⚠️ The AI agent reached its maximum number of tool calls. The response may be incomplete.")
+                                    response += "\n\n💡 **Tip**: Try asking a more specific question or break your request into smaller parts for better results."
+                                
+                            except Exception as agent_error:
+                                # Handle specific agent errors
+                                error_str = str(agent_error)
+                                if "max iterations" in error_str.lower():
+                                    response = """I apologize, but I reached the maximum number of analysis steps while processing your request. This usually happens with very complex queries.
+
+**What you can do:**
+1. **Break down your question** into smaller, more specific parts
+2. **Be more specific** about which dataset or document you want me to analyze
+3. **Try a simpler version** of your question first
+
+**Examples of more specific questions:**
+- Instead of "analyze everything", try "show me refugee trends for Q4"
+- Instead of "create charts for all data", try "create a bar chart of funding by region"
+- Instead of "what does the data show", try "what are the top 5 programs by effectiveness"
+
+Please try rephrasing your question more specifically, and I'll be happy to help!"""
+                                    st.warning("⚠️ Analysis complexity limit reached")
+                                else:
+                                    response = f"I encountered an error while processing your request: {error_str}\n\nPlease try rephrasing your question or contact support if the issue persists."
+                                    st.error("An error occurred during analysis")
                             
                             # Display the response
                             st.markdown(response)

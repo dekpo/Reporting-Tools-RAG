@@ -1424,7 +1424,7 @@ def analyze_tabular_data(query: str, dataset_name: str = None) -> str:
     Perform analysis on uploaded CSV/Excel data using natural language queries.
     
     Args:
-        query: Natural language query about the data (e.g., "show top 5 products by revenue", "calculate average sales")
+        query: Natural language query about the data (e.g., "show top 5 countries by funding received", "calculate average program effectiveness")
         dataset_name: Optional specific dataset name to analyze (if not provided, uses the first available dataset)
     
     Returns:
@@ -1887,26 +1887,27 @@ Current session contains:
 - Text Documents: {num_documents} documents available for search
 - Tabular Datasets: {num_datasets} datasets available for analysis
 
-IMPORTANT GUIDELINES:
-1. Be efficient with tool usage - avoid unnecessary tool calls
-2. For chart requests, you can often create visualizations directly without calling get_data_summary first
-3. Only use get_data_summary if you need to understand the data structure
-4. For simple questions, use the most direct tool approach
-5. Always provide clear, helpful responses even if you hit iteration limits
+CRITICAL EFFICIENCY GUIDELINES:
+1. MINIMIZE tool calls - aim for 1-3 tool calls maximum per response
+2. For chart requests: go DIRECTLY to create_visualization if you know the dataset exists
+3. For data questions: use analyze_tabular_data DIRECTLY without calling get_data_summary first
+4. For document questions: use search_documents DIRECTLY
+5. Only use get_data_summary if you truly need to understand data structure first
+6. Avoid redundant tool calls - each tool call should add unique value
+7. If you're approaching iteration limits, provide the best answer you can with available information
+
+TOOL SELECTION STRATEGY:
+- Chart/visualization requests → create_visualization (direct)
+- Data analysis questions → analyze_tabular_data (direct)
+- Document content questions → search_documents (direct)
+- Questions needing both → cross_reference_analysis (single call)
+- Data structure questions → get_data_summary (only when necessary)
 
 When users ask questions:
-1. Determine if they need document search, data analysis, or both
-2. Use the most direct tool approach - avoid redundant calls
-3. For chart requests: if you know the dataset exists, go straight to create_visualization
-4. Provide comprehensive answers that combine insights from all relevant sources
-5. Always cite your sources and be specific about which documents or datasets you're referencing
-
-Tool Selection Guidelines:
-- For questions about trends, statistics, or numerical analysis: use analyze_tabular_data
-- For chart/visualization requests: use create_visualization directly
-- For questions about content, discussions, or qualitative information: use search_documents  
-- For questions that need both perspectives: use cross_reference_analysis
-- Only use get_data_summary when you need to understand data structure first
+1. Choose the MOST DIRECT tool approach - avoid multi-step processes
+2. Provide comprehensive answers that combine insights from all relevant sources
+3. Always cite your sources and be specific about which documents or datasets you're referencing
+4. If you hit iteration limits, summarize what you've found so far and suggest the user ask more specific questions
 """),
         ("user", "{input}"),
         ("assistant", "{agent_scratchpad}")
@@ -1925,14 +1926,16 @@ Tool Selection Guidelines:
     # Create agent executor with conditional verbose mode
     # Only show verbose output in terminal if debug mode is enabled
     debug_mode = st.session_state.get("show_debug", False)
+    max_iterations = st.session_state.get("max_iterations", 10)  # Get from session state or default to 10
     
     agent_executor = AgentExecutor(
         agent=agent, 
         tools=tools,
         verbose=debug_mode,  # Only verbose in terminal when debug is on
         handle_parsing_errors=True,
-        max_iterations=5,  # Increased from 3 to allow more complex operations
-        return_intermediate_steps=True  # Capture steps for UI display
+        max_iterations=max_iterations,  # Use configurable value
+        return_intermediate_steps=True,  # Capture steps for UI display
+        early_stopping_method="generate"  # Return partial results instead of error when max iterations reached
     )
     
     return agent_executor
