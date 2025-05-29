@@ -164,6 +164,7 @@ def sidebar():
     st.sidebar.page_link(page="pages/01_anonymize.py",label="Anonymize Content",icon=":material/sms:")
     st.sidebar.page_link(page="pages/02_chatgpt.py",label="ChatGPT Tool",icon=":material/hexagon:")
     st.sidebar.page_link(page="pages/03_revert.py",label="Reverse Anonymization",icon=":material/comment:")
+    st.sidebar.page_link(page="pages/04_help.py",label="Help & Documentation",icon=":material/help:")
 
     if "saved_content" in st.session_state or "saved_anonymisation" in st.session_state or "saved_gpt_answers" in st.session_state:
         st.sidebar.header(":floppy_disk: Your Session",divider=True)
@@ -1583,6 +1584,8 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         return "No tabular datasets are currently loaded."
     
     try:
+        import pandas as pd
+        
         # Debug: Log function entry
         if st.session_state.get("show_debug", False):
             st.write(f"🔧 DEBUG: Creating {chart_type} chart")
@@ -1595,10 +1598,33 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
             dataset_name = list(available_datasets.keys())[0]
             df = available_datasets[dataset_name]
         
+        # Make a copy to avoid modifying the original dataset
+        df = df.copy()
+        
         # Debug: Log dataset info
         if st.session_state.get("show_debug", False):
             st.write(f"🔧 DEBUG: Using dataset '{dataset_name}' with shape {df.shape}")
             st.write(f"🔧 DEBUG: Columns: {list(df.columns)}")
+            st.write(f"🔧 DEBUG: Column dtypes: {dict(df.dtypes)}")
+        
+        # DATA TYPE CONVERSION FIX - Convert object columns that contain numbers to numeric
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                # Try to convert to numeric if possible
+                try:
+                    # Check if it's mostly numeric (allows for some missing values)
+                    numeric_converted = pd.to_numeric(df[col], errors='coerce')
+                    non_null_count = numeric_converted.notna().sum()
+                    total_count = len(df[col])
+                    
+                    # If more than 70% of values can be converted to numeric, do the conversion
+                    if non_null_count / total_count > 0.7:
+                        df[col] = numeric_converted
+                        if st.session_state.get("show_debug", False):
+                            st.write(f"🔧 DEBUG: Converted column '{col}' from object to numeric")
+                except:
+                    # If conversion fails, keep as is
+                    pass
         
         # Set default title
         if not title:
@@ -1657,10 +1683,35 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         else:
             return f"Unsupported chart type: {chart_type}. Supported types: bar, line, scatter, histogram, pie, box, heatmap"
         
+        # ADDITIONAL DATA VALIDATION - Check for empty or invalid data
+        if chart_data is None or chart_data.empty:
+            return f"Error: No valid data found for creating {chart_type} chart. Please check your column names and data."
+        
+        # For numeric charts, ensure we have valid numeric data
+        if chart_type.lower() in ["bar", "line", "scatter", "box"] and y_column:
+            if y_column in chart_data.columns:
+                # Check if y_column has valid numeric data
+                if chart_data[y_column].dtype == 'object':
+                    # Try one more conversion attempt
+                    chart_data[y_column] = pd.to_numeric(chart_data[y_column], errors='coerce')
+                
+                # Check for all NaN values after conversion
+                if chart_data[y_column].isna().all():
+                    return f"Error: Column '{y_column}' contains no valid numeric data for {chart_type} chart."
+                
+                # Remove rows with NaN values in y_column
+                chart_data = chart_data.dropna(subset=[y_column])
+                
+                if chart_data.empty:
+                    return f"Error: No valid data rows remaining after cleaning for {chart_type} chart."
+        
         # Debug: Log chart data info
         if st.session_state.get("show_debug", False):
             st.write(f"🔧 DEBUG: Chart data shape: {chart_data.shape}")
             st.write(f"🔧 DEBUG: Chart data columns: {list(chart_data.columns)}")
+            st.write(f"🔧 DEBUG: Chart data dtypes: {dict(chart_data.dtypes)}")
+            if y_column and y_column in chart_data.columns:
+                st.write(f"🔧 DEBUG: Y-column '{y_column}' sample values: {chart_data[y_column].head().tolist()}")
         
         # Initialize charts storage if it doesn't exist
         if "stored_charts" not in st.session_state:
@@ -1699,7 +1750,8 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
             chart_description += f"**X-axis:** {x_column}\n"
         if y_column:
             chart_description += f"**Y-axis:** {y_column}\n"
-        chart_description += f"**Chart Type:** {chart_type.title()}\n\n"
+        chart_description += f"**Chart Type:** {chart_type.title()}\n"
+        chart_description += f"**Data Points:** {len(chart_data)} rows\n\n"
         chart_description += f"[CHART_ID:{chart_id}]"  # Hidden marker for chart identification
         
         return chart_description
@@ -1779,6 +1831,25 @@ def recreate_chart_from_config(chart_config):
             st.error(f"Error recreating DataFrame: {df_error}")
             return None
         
+        # DATA TYPE CONVERSION FIX FOR RECREATION - Ensure numeric columns are properly typed
+        if chart_type != "heatmap":  # Heatmap already has proper correlation data
+            for col in df.columns:
+                if col == y_column and y_column:
+                    # Ensure y_column is numeric for numerical charts
+                    if chart_type in ["bar", "line", "scatter", "box", "pie"]:
+                        try:
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                            if st.session_state.get("show_debug", False):
+                                st.write(f"🔧 DEBUG: Converted '{col}' to numeric for chart recreation")
+                        except:
+                            pass
+        
+        # Debug: Log DataFrame info after conversion
+        if st.session_state.get("show_debug", False):
+            st.write(f"🔧 DEBUG: DataFrame dtypes after conversion: {dict(df.dtypes)}")
+            if y_column and y_column in df.columns:
+                st.write(f"🔧 DEBUG: Y-column '{y_column}' sample values: {df[y_column].head().tolist()}")
+        
         # Validate that required columns exist
         if chart_type in ["bar", "line", "scatter"] and (not x_column or not y_column):
             if st.session_state.get("show_debug", False):
@@ -1804,9 +1875,25 @@ def recreate_chart_from_config(chart_config):
                     st.write(f"🔧 DEBUG: y_column '{y_column}' not in DataFrame columns: {list(df.columns)}")
                 return None
         
+        # ADDITIONAL VALIDATION - Check for valid data before plotting
+        if chart_type in ["bar", "line", "scatter", "box", "pie"] and y_column:
+            if df[y_column].isna().all():
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: All values in y_column '{y_column}' are NaN")
+                return None
+            
+            # Remove NaN values
+            df_clean = df.dropna(subset=[y_column])
+            if df_clean.empty:
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG: No valid data after removing NaN values")
+                return None
+            df = df_clean
+        
         # Debug: Log before chart creation
         if st.session_state.get("show_debug", False):
             st.write(f"🔧 DEBUG: About to create {chart_type} chart")
+            st.write(f"🔧 DEBUG: Final DataFrame shape: {df.shape}")
         
         # Recreate the chart based on type
         if chart_type == "bar":
@@ -1834,6 +1921,7 @@ def recreate_chart_from_config(chart_config):
         # Debug: Log successful creation
         if st.session_state.get("show_debug", False):
             st.write(f"🔧 DEBUG: Chart created successfully!")
+            st.write(f"🔧 DEBUG: Figure type: {type(fig)}")
             
         return fig
         
