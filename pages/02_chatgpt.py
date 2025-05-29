@@ -40,6 +40,16 @@ if "gpt_api_key" not in st.session_state:
         document_metadata = lib.load_document_metadata(persist_directory)
         if document_metadata:
             st.info(f"Found {len(document_metadata)} document(s) in storage. After submitting your API key, you'll be able to access them.")
+    
+    # Check for tabular datasets as well
+    has_documents = os.path.exists(persist_directory) and os.path.isdir(persist_directory) and lib.load_document_metadata(persist_directory)
+    has_datasets = os.path.exists('./tabular_data') and os.path.isdir('./tabular_data') and len([f for f in os.listdir('./tabular_data') if f.endswith(('.csv', '.xlsx', '.xls'))]) > 0
+    
+    # Show message and button if no data sources are available
+    if not has_documents and not has_datasets:
+        st.info("💡 **Tip:** Upload documents or datasets on the Home page first to get the most out of ChatGPT analysis!")
+        st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
+        st.divider()
 
     MY_API_KEY = st.text_input(
             label="**Please specify your own OpenAI API Key** this one is for testing purpose you can use it and buy me a coffee ;)",
@@ -335,6 +345,7 @@ else:
         
         if not has_documents and not has_datasets:
             st.warning("No data sources loaded. Please upload documents or datasets to begin analysis.")
+            st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
         else:
             # Show what's available
             available_sources = []
@@ -1074,6 +1085,7 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                 st.info("No documents found in the database. Process a document to add it to the sources.")
         else:
             st.info("📄 No document sources loaded. Upload documents on the Home page and process them to add document sources.")
+            st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
 
         # Tabular Dataset Sources Section
         st.divider()
@@ -1169,8 +1181,10 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                         st.error("Click 'Clear All Datasets' again to confirm deletion of ALL datasets.", icon="⚠️")
             else:
                 st.info("No datasets found in storage. Upload a CSV or Excel file to add datasets.")
+                st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
         else:
             st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to add datasets.")
+            st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
 
     # =================== TAB 3: SETTINGS ===================
     with tab3:
