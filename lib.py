@@ -1634,9 +1634,17 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         chart_data = None
         
         if chart_type.lower() == "bar":
-            if not x_column or not y_column:
-                return "Bar chart requires both x_column and y_column parameters."
-            chart_data = df[[x_column, y_column]].copy()
+            if not x_column:
+                return "Bar chart requires at least x_column parameter."
+            
+            if y_column:
+                # Standard bar chart with both x and y columns
+                chart_data = df[[x_column, y_column]].copy()
+            else:
+                # Categorical bar chart - create counts automatically
+                chart_data = df[x_column].value_counts().reset_index()
+                chart_data.columns = [x_column, 'count']
+                y_column = 'count'  # Set y_column for bar chart
             
         elif chart_type.lower() == "line":
             if not x_column or not y_column:
@@ -1717,8 +1725,16 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         if "stored_charts" not in st.session_state:
             st.session_state.stored_charts = {}
         
-        # Generate a unique chart ID based on current message count
-        chart_id = f"chart_{len(st.session_state.get('messages', []))}"
+        # Generate a unique chart ID that includes timestamp and counter to avoid collisions
+        import time
+        base_chart_id = f"chart_{len(st.session_state.get('messages', []))}"
+        
+        # Check if this chart ID already exists, if so add a counter
+        counter = 0
+        chart_id = base_chart_id
+        while chart_id in st.session_state.stored_charts:
+            counter += 1
+            chart_id = f"{base_chart_id}_{counter}"
         
         # Store chart configuration instead of the figure object
         chart_config = {
@@ -1740,7 +1756,12 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         # Store the chart configuration
         st.session_state.stored_charts[chart_id] = chart_config
         
-        # Store the current chart ID for immediate display
+        # Store multiple chart IDs for this response
+        if "current_chart_ids" not in st.session_state:
+            st.session_state.current_chart_ids = []
+        st.session_state.current_chart_ids.append(chart_id)
+        
+        # Also keep the old current_chart_id for backwards compatibility
         st.session_state.current_chart_id = chart_id
         
         # Create a descriptive message about the chart with the chart ID embedded
@@ -1984,8 +2005,16 @@ CRITICAL EFFICIENCY GUIDELINES:
 6. Avoid redundant tool calls - each tool call should add unique value
 7. If you're approaching iteration limits, provide the best answer you can with available information
 
+VISUALIZATION BEST PRACTICES:
+- For categorical data (like SEX, GRADE, ORGANIZATION): Use bar charts with only x_column (counts will be created automatically), or pie charts
+- For numeric trends over time: Use line charts with time on x-axis and numeric values on y-axis
+- For numeric comparisons: Use bar charts with category on x-axis and numeric values on y-axis
+- For distributions: Use histograms for single variables, box plots for distributions by category
+- For correlations: Use scatter plots or heatmaps
+- When creating multiple charts, make each chart call separately to ensure all charts are displayed
+
 TOOL SELECTION STRATEGY:
-- Chart/visualization requests → create_visualization (direct)
+- Chart/visualization requests → create_visualization (direct, multiple calls for multiple charts)
 - Data analysis questions → analyze_tabular_data (direct)
 - Document content questions → search_documents (direct)
 - Questions needing both → cross_reference_analysis (single call)
@@ -1993,9 +2022,10 @@ TOOL SELECTION STRATEGY:
 
 When users ask questions:
 1. Choose the MOST DIRECT tool approach - avoid multi-step processes
-2. Provide comprehensive answers that combine insights from all relevant sources
-3. Always cite your sources and be specific about which documents or datasets you're referencing
-4. If you hit iteration limits, summarize what you've found so far and suggest the user ask more specific questions
+2. For multiple charts, call create_visualization once for EACH chart separately
+3. Provide comprehensive answers that combine insights from all relevant sources
+4. Always cite your sources and be specific about which documents or datasets you're referencing
+5. If you hit iteration limits, summarize what you've found so far and suggest the user ask more specific questions
 """),
         ("user", "{input}"),
         ("assistant", "{agent_scratchpad}")

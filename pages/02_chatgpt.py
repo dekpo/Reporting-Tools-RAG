@@ -820,11 +820,25 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                             # Display the response
                             st.markdown(response)
                             
-                            # Check if a chart was created and display it
-                            if "current_chart_id" in st.session_state and st.session_state.current_chart_id is not None:
-                                chart_id = st.session_state.current_chart_id
+                            # Check if charts were created and display them
+                            chart_ids_to_display = []
+                            chart_ids_for_response = ""
+                            
+                            # Check for multiple charts created in this response
+                            if "current_chart_ids" in st.session_state and st.session_state.current_chart_ids:
+                                chart_ids_to_display = st.session_state.current_chart_ids.copy()
                                 if st.session_state.get("show_debug", False):
-                                    st.write(f"🔧 DEBUG: Found current_chart_id: {chart_id}")
+                                    st.write(f"🔧 DEBUG: Found current_chart_ids: {chart_ids_to_display}")
+                            # Fallback to single chart ID for backwards compatibility
+                            elif "current_chart_id" in st.session_state and st.session_state.current_chart_id is not None:
+                                chart_ids_to_display = [st.session_state.current_chart_id]
+                                if st.session_state.get("show_debug", False):
+                                    st.write(f"🔧 DEBUG: Found single current_chart_id: {st.session_state.current_chart_id}")
+                            
+                            # Display all charts that were created
+                            for chart_id in chart_ids_to_display:
+                                if st.session_state.get("show_debug", False):
+                                    st.write(f"🔧 DEBUG: Processing chart ID: {chart_id}")
                                     st.write(f"🔧 DEBUG: Stored charts keys: {list(st.session_state.get('stored_charts', {}).keys())}")
                                 
                                 if chart_id in st.session_state.get("stored_charts", {}):
@@ -838,19 +852,25 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                                             st.write(f"🔧 DEBUG: Chart recreation successful, displaying chart")
                                         st.plotly_chart(fig, use_container_width=True, key=f"current_chart_{chart_id}")
                                         
-                                        # Append chart ID to response for persistence in chat history
-                                        response += f"\n\n[CHART_ID:{chart_id}]"
+                                        # Collect chart IDs for adding to response
+                                        chart_ids_for_response += f"\n\n[CHART_ID:{chart_id}]"
                                     else:
                                         # Show fallback message if chart recreation failed
-                                        st.warning("⚠️ Chart could not be displayed. The chart data may be corrupted or incompatible with the current session.")
+                                        st.warning(f"⚠️ Chart {chart_id} could not be displayed. The chart data may be corrupted or incompatible with the current session.")
                                         if st.session_state.get("show_debug", False):
                                             st.write("**Debug Info:** Chart config:", chart_config)
                                 else:
                                     if st.session_state.get("show_debug", False):
                                         st.write(f"🔧 DEBUG: Chart ID {chart_id} not found in stored_charts")
-                                
-                                # Clear the current chart ID after displaying
-                                st.session_state.current_chart_id = None
+                            
+                            # Add all chart IDs to response for persistence in chat history
+                            if chart_ids_for_response:
+                                response += chart_ids_for_response
+                            
+                            # Clear the current chart IDs after displaying
+                            if "current_chart_ids" in st.session_state:
+                                st.session_state.current_chart_ids = []
+                            st.session_state.current_chart_id = None
                             
                             # Show debug information if enabled
                             if st.session_state.get("show_debug", False):
@@ -1000,46 +1020,46 @@ Please try rephrasing your question more specifically, and I'll be happy to help
             # Display the message content
             message_content = message["content"]
             
-            # Check if this message contains a chart ID
+            # Check if this message contains chart IDs (support multiple charts)
             import re
-            chart_match = re.search(r'\[CHART_ID:(chart_\d+)\]', message_content)
+            chart_matches = re.findall(r'\[CHART_ID:(chart_\d+(?:_\d+)?)\]', message_content)
             
             if st.session_state.get("show_debug", False):
-                st.write(f"🔧 DEBUG: Checking message for chart ID: {message_content[:100]}...")
-                if chart_match:
-                    st.write(f"🔧 DEBUG: Found chart ID in message: {chart_match.group(1)}")
+                st.write(f"🔧 DEBUG: Checking message for chart IDs: {message_content[:100]}...")
+                if chart_matches:
+                    st.write(f"🔧 DEBUG: Found chart IDs in message: {chart_matches}")
                 else:
-                    st.write(f"🔧 DEBUG: No chart ID found in message")
+                    st.write(f"🔧 DEBUG: No chart IDs found in message")
             
-            if chart_match and message["role"] == "assistant":
-                # Remove the chart ID from the displayed message
-                display_content = re.sub(r'\[CHART_ID:chart_\d+\]', '', message_content)
+            if chart_matches and message["role"] == "assistant":
+                # Remove all chart IDs from the displayed message
+                display_content = re.sub(r'\[CHART_ID:chart_\d+(?:_\d+)?\]', '', message_content)
                 st.markdown(display_content)
                 
-                # Display the chart if it exists in stored charts
-                chart_id = chart_match.group(1)
-                if st.session_state.get("show_debug", False):
-                    st.write(f"🔧 DEBUG: Looking for chart ID: {chart_id}")
-                    st.write(f"🔧 DEBUG: Available chart IDs: {list(st.session_state.get('stored_charts', {}).keys())}")
-                
-                if chart_id in st.session_state.get("stored_charts", {}):
-                    chart_config = st.session_state.stored_charts[chart_id]
+                # Display all charts that exist in stored charts
+                for chart_id in chart_matches:
                     if st.session_state.get("show_debug", False):
-                        st.write(f"🔧 DEBUG: Found chart config, recreating chart")
+                        st.write(f"🔧 DEBUG: Looking for chart ID: {chart_id}")
+                        st.write(f"🔧 DEBUG: Available chart IDs: {list(st.session_state.get('stored_charts', {}).keys())}")
                     
-                    fig = lib.recreate_chart_from_config(chart_config)
-                    if fig is not None:
+                    if chart_id in st.session_state.get("stored_charts", {}):
+                        chart_config = st.session_state.stored_charts[chart_id]
                         if st.session_state.get("show_debug", False):
-                            st.write(f"🔧 DEBUG: Chart recreation successful for history display")
-                        st.plotly_chart(fig, use_container_width=True, key=f"history_chart_{chart_id}")
+                            st.write(f"🔧 DEBUG: Found chart config, recreating chart")
+                        
+                        fig = lib.recreate_chart_from_config(chart_config)
+                        if fig is not None:
+                            if st.session_state.get("show_debug", False):
+                                st.write(f"🔧 DEBUG: Chart recreation successful for history display")
+                            st.plotly_chart(fig, use_container_width=True, key=f"history_chart_{chart_id}")
+                        else:
+                            # Show fallback message if chart recreation failed
+                            st.warning(f"⚠️ Chart {chart_id} could not be displayed. The chart data may be corrupted or incompatible with the current session.")
+                            if st.session_state.get("show_debug", False):
+                                st.write("**Debug Info:** Chart config:", chart_config)
                     else:
-                        # Show fallback message if chart recreation failed
-                        st.warning("⚠️ Chart could not be displayed. The chart data may be corrupted or incompatible with the current session.")
                         if st.session_state.get("show_debug", False):
-                            st.write("**Debug Info:** Chart config:", chart_config)
-                else:
-                    if st.session_state.get("show_debug", False):
-                        st.write(f"🔧 DEBUG: Chart ID {chart_id} not found in stored charts")
+                            st.write(f"🔧 DEBUG: Chart ID {chart_id} not found in stored charts")
             else:
                 # Display normal message
                 st.markdown(message_content)
@@ -1117,6 +1137,8 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                     st.session_state.stored_charts = {}
                 if "current_chart_id" in st.session_state:
                     st.session_state.current_chart_id = None
+                if "current_chart_ids" in st.session_state:
+                    st.session_state.current_chart_ids = []
                 st.rerun()
         
         with col4:
