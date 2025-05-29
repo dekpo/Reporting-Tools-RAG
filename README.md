@@ -33,51 +33,51 @@ This application provides a streamlined workflow for processing meeting transcri
 
 #### Bar Charts
 ```
-"Create a bar chart showing sales by region using the revenue column"
-"Make a bar chart of product categories vs total sales"
-"Show me a bar chart comparing department budgets"
+"Create a bar chart showing humanitarian aid distribution by region"
+"Make a bar chart of program funding allocations by sector"
+"Show me a bar chart comparing peacekeeping mission budgets"
 ```
 
 #### Line Charts
 ```
-"Create a line chart showing sales trends over time"
-"Generate a line chart of monthly revenue progression"
-"Show me how customer satisfaction changed over the quarters"
+"Create a line chart showing refugee population trends over time"
+"Generate a line chart of development indicator progress by year"
+"Show me how food security levels changed over the quarters"
 ```
 
 #### Scatter Plots
 ```
-"Create a scatter plot of price vs sales volume"
-"Show me a scatter plot comparing age and income"
-"Generate a scatter plot of marketing spend vs revenue"
+"Create a scatter plot of development funding vs poverty reduction"
+"Show me a scatter plot comparing education access and literacy rates"
+"Generate a scatter plot of climate funding vs emission reductions"
 ```
 
 #### Pie Charts
 ```
-"Create a pie chart showing market share by company"
-"Generate a pie chart of budget allocation by department"
-"Show me a pie chart of customer segments"
+"Create a pie chart showing humanitarian funding by donor country"
+"Generate a pie chart of program budget allocation by theme"
+"Show me a pie chart of refugee populations by country of origin"
 ```
 
 #### Histograms
 ```
-"Create a histogram of customer ages"
-"Show me a histogram of order values"
-"Generate a histogram of response times"
+"Create a histogram of beneficiary age distributions"
+"Show me a histogram of project completion times"
+"Generate a histogram of humanitarian response times"
 ```
 
 #### Box Plots
 ```
-"Create a box plot of salaries by department"
-"Generate a box plot showing price distribution"
-"Show me a box plot of performance scores by team"
+"Create a box plot of program effectiveness scores by region"
+"Generate a box plot showing funding distribution patterns"
+"Show me a box plot of development indicators by country group"
 ```
 
 #### Heatmaps
 ```
-"Create a correlation heatmap of all numeric columns"
-"Show me a heatmap of relationships between variables"
-"Generate a correlation matrix for the financial data"
+"Create a correlation heatmap of all development indicators"
+"Show me a heatmap of relationships between humanitarian metrics"
+"Generate a correlation matrix for the sustainable development goals data"
 ```
 
 ### How to Use Chart Generation
@@ -102,11 +102,11 @@ This application provides a streamlined workflow for processing meeting transcri
 
 ### Pro Tips for Chart Generation
 
-- **Be Specific with Column Names**: *"Create a bar chart with 'Product_Name' on x-axis and 'Revenue' on y-axis"*
-- **Add Custom Titles**: *"Create a line chart of sales over time with title 'Q4 Performance Trends'"*
-- **Ask for Suggestions**: *"What's the best way to visualize my sales data?"* - The AI will recommend optimal chart types
-- **Combine Analysis with Visualization**: *"Analyze the top 5 products by revenue and create a bar chart"*
-- **Cross-Reference Data**: *"Show me a correlation between the survey responses and the sales data"*
+- **Be Specific with Column Names**: *"Create a bar chart with 'Country_Name' on x-axis and 'Funding_Amount' on y-axis"*
+- **Add Custom Titles**: *"Create a line chart of aid distribution over time with title 'Q4 Humanitarian Response Trends'"*
+- **Ask for Suggestions**: *"What's the best way to visualize my humanitarian data?"* - The AI will recommend optimal chart types
+- **Combine Analysis with Visualization**: *"Analyze the top 5 countries by funding received and create a bar chart"*
+- **Cross-Reference Data**: *"Show me a correlation between the survey responses and the program effectiveness data"*
 - **Multiple Charts**: You can request several different charts in the same conversation
 - **Data Exploration**: *"Show me the data summary first, then create appropriate visualizations"*
 
