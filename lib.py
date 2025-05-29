@@ -1765,7 +1765,7 @@ def create_visualization(chart_type: str, dataset_name: str = None, x_column: st
         st.session_state.current_chart_id = chart_id
         
         # Create a descriptive message about the chart with the chart ID embedded
-        chart_description = f"📊 **{chart_type.title()} Chart Created: {title}**\n\n"
+        chart_description = f"**{chart_type.title()} Chart Created: {title}**\n\n"
         chart_description += f"**Dataset:** {dataset_name}\n"
         if x_column:
             chart_description += f"**X-axis:** {x_column}\n"
@@ -2020,12 +2020,20 @@ TOOL SELECTION STRATEGY:
 - Questions needing both → cross_reference_analysis (single call)
 - Data structure questions → get_data_summary (only when necessary)
 
+IMPORTANT OUTPUT FORMATTING RULES:
+- NEVER use markdown image syntax ![alt](url) in your responses
+- DO NOT attempt to include icons, images, or visual elements in bullet points
+- DO NOT generate any markdown that tries to display external images
+- Focus on text-based descriptions and let the create_visualization tool handle all visual content
+- When describing charts, use plain text descriptions without attempting to embed visual elements
+
 When users ask questions:
 1. Choose the MOST DIRECT tool approach - avoid multi-step processes
 2. For multiple charts, call create_visualization once for EACH chart separately
 3. Provide comprehensive answers that combine insights from all relevant sources
 4. Always cite your sources and be specific about which documents or datasets you're referencing
 5. If you hit iteration limits, summarize what you've found so far and suggest the user ask more specific questions
+6. Use clear, text-only formatting - no visual elements or image references in your text responses
 """),
         ("user", "{input}"),
         ("assistant", "{agent_scratchpad}")
