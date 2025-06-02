@@ -2,7 +2,7 @@
 import streamlit as st
 import streamlit_antd_components as sac
 import spacy
-from typing import List, Union, Dict, Any
+from typing import List, Union, Dict, Any, Optional
 from openai import OpenAI
 import os
 import json
@@ -1375,7 +1375,7 @@ except ImportError:
     st.warning("Tool-calling dependencies are missing. Please install langchain-experimental and langchain-openai.")
 
 @tool
-def search_documents(query: str, doc_sources: str = None) -> str:
+def search_documents(query: str, doc_sources: Optional[str] = None) -> str:
     """
     Search through uploaded text documents using semantic similarity.
     
@@ -1420,7 +1420,7 @@ def search_documents(query: str, doc_sources: str = None) -> str:
         return f"Error searching documents: {str(e)}"
 
 @tool
-def analyze_tabular_data(query: str, dataset_name: str = None) -> str:
+def analyze_tabular_data(query: str, dataset_name: Optional[str] = None) -> str:
     """
     Perform analysis on uploaded CSV/Excel data using natural language queries.
     
@@ -1523,7 +1523,7 @@ Based on the document content and data analysis above, here are the key connecti
         return f"Error performing cross-reference analysis: {str(e)}"
 
 @tool
-def get_data_summary(dataset_name: str = None) -> str:
+def get_data_summary(dataset_name: Optional[str] = None) -> str:
     """
     Get a summary overview of the available tabular datasets including column information and basic statistics.
     
@@ -1561,7 +1561,7 @@ def get_data_summary(dataset_name: str = None) -> str:
         return f"Error getting data summary: {str(e)}"
 
 @tool
-def create_visualization(chart_type: str, dataset_name: str = None, x_column: str = None, y_column: str = None, title: str = None) -> str:
+def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_column: Optional[str] = None, y_column: Optional[str] = None, title: Optional[str] = None) -> str:
     """
     Create charts and visualizations from tabular data.
     
