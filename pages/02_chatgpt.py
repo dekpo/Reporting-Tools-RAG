@@ -900,6 +900,10 @@ Provide clear, actionable recommendations."""
     
     # Process the prompt when submitted
     if prompt:
+        # Clear any pending confirmations when user sends a new message
+        if "confirm_clear_chat" in st.session_state:
+            st.session_state["confirm_clear_chat"] = False
+            
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
@@ -1143,40 +1147,11 @@ Please try rephrasing your question more specifically, and I'll be happy to help
         
         with col2:
             # Copy answers to clipboard
-            if st.button("Copy", use_container_width=True):
-                # Format conversation for clipboard
-                conversation_text = ""
-                for message in st.session_state.messages:
-                    if message["role"] == "user":
-                        conversation_text += f"Question: {message['content']}\n\n"
-                    else:
-                        conversation_text += f"Answer: {message['content']}\n\n"
-                
-                # Copy to clipboard
-                pyperclip.copy(conversation_text)
-                st.success("Copied!")
+            copy_clicked = st.button("Copy", use_container_width=True)
         
         with col3:
             # Clear conversation with confirmation
-            if st.button("Clear Chat", use_container_width=True):
-                if st.session_state.get("confirm_clear_chat"):
-                    # If already confirmed, perform the deletion
-                    st.session_state.messages = []
-                    # Also clear stored charts to free up memory
-                    if "stored_charts" in st.session_state:
-                        st.session_state.stored_charts = {}
-                    if "current_chart_id" in st.session_state:
-                        st.session_state.current_chart_id = None
-                    if "current_chart_ids" in st.session_state:
-                        st.session_state.current_chart_ids = []
-                    # Clear confirmation state
-                    st.session_state["confirm_clear_chat"] = False
-                    st.success("Chat history cleared!")
-                    st.rerun()
-                else:
-                    # Set confirmation state and show confirmation message
-                    st.session_state["confirm_clear_chat"] = True
-                    st.warning("⚠️ Click 'Clear Chat' again to confirm. This action cannot be undone!", icon="⚠️")
+            clear_clicked = st.button("Clear Chat", use_container_width=True)
         
         with col4:
             # Save and proceed to reverse anonymization
@@ -1215,6 +1190,48 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                     key="save_conversation_disabled",
                     help="Process a document first to enable this feature"
                 )
+        
+        # Handle button actions and display messages outside column layout
+        if copy_clicked:
+            # Clear any pending confirmations when user performs other actions
+            if "confirm_clear_chat" in st.session_state:
+                st.session_state["confirm_clear_chat"] = False
+                
+            # Format conversation for clipboard
+            conversation_text = ""
+            for message in st.session_state.messages:
+                if message["role"] == "user":
+                    conversation_text += f"Question: {message['content']}\n\n"
+                else:
+                    conversation_text += f"Answer: {message['content']}\n\n"
+            
+            # Copy to clipboard
+            pyperclip.copy(conversation_text)
+            st.success("✅ Conversation copied to clipboard!")
+        
+        if clear_clicked:
+            if st.session_state.get("confirm_clear_chat"):
+                # If already confirmed, perform the deletion
+                st.session_state.messages = []
+                # Also clear stored charts to free up memory
+                if "stored_charts" in st.session_state:
+                    st.session_state.stored_charts = {}
+                if "current_chart_id" in st.session_state:
+                    st.session_state.current_chart_id = None
+                if "current_chart_ids" in st.session_state:
+                    st.session_state.current_chart_ids = []
+                # Clear confirmation state
+                st.session_state["confirm_clear_chat"] = False
+                st.success("✅ Chat history cleared successfully!")
+                st.rerun()
+            else:
+                # Set confirmation state and show confirmation message
+                st.session_state["confirm_clear_chat"] = True
+                st.warning("⚠️ Click 'Clear Chat' again to confirm. This action cannot be undone!")
+        
+        # Show any pending confirmation messages
+        if st.session_state.get("confirm_clear_chat") and not clear_clicked:
+            st.warning("⚠️ Confirmation pending: Click 'Clear Chat' again to confirm deletion.")
 
 def display_tabular_sources():
     """Display available tabular data sources with management options"""
