@@ -1157,17 +1157,26 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                 st.success("Copied!")
         
         with col3:
-            # Clear conversation
+            # Clear conversation with confirmation
             if st.button("Clear Chat", use_container_width=True):
-                st.session_state.messages = []
-                # Also clear stored charts to free up memory
-                if "stored_charts" in st.session_state:
-                    st.session_state.stored_charts = {}
-                if "current_chart_id" in st.session_state:
-                    st.session_state.current_chart_id = None
-                if "current_chart_ids" in st.session_state:
-                    st.session_state.current_chart_ids = []
-                st.rerun()
+                if st.session_state.get("confirm_clear_chat"):
+                    # If already confirmed, perform the deletion
+                    st.session_state.messages = []
+                    # Also clear stored charts to free up memory
+                    if "stored_charts" in st.session_state:
+                        st.session_state.stored_charts = {}
+                    if "current_chart_id" in st.session_state:
+                        st.session_state.current_chart_id = None
+                    if "current_chart_ids" in st.session_state:
+                        st.session_state.current_chart_ids = []
+                    # Clear confirmation state
+                    st.session_state["confirm_clear_chat"] = False
+                    st.success("Chat history cleared!")
+                    st.rerun()
+                else:
+                    # Set confirmation state and show confirmation message
+                    st.session_state["confirm_clear_chat"] = True
+                    st.warning("⚠️ Click 'Clear Chat' again to confirm. This action cannot be undone!", icon="⚠️")
         
         with col4:
             # Save and proceed to reverse anonymization
