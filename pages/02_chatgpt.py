@@ -897,7 +897,7 @@ Provide clear, actionable recommendations."""
     # Templates button - positioned for bottom placement via CSS
     templates_container = st.container()
     with templates_container:
-        if st.button("💡 Templates", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
+        if st.button("💡 Prompt Assistant", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
             show_prompt_assistant()
     
     # Process the prompt when submitted
