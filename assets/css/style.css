@@ -176,3 +176,9 @@ div[data-testid="stMarkdownContainer"] p a.link-primary{
     color: var(--color-primary-100);
     text-decoration: none;
 }
+
+div[data-testid="stElementContainer"].st-key-templates_bottom_button {
+    z-index: 100;
+    position:fixed;
+    bottom:15px;
+}

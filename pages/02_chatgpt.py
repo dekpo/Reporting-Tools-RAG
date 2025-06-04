@@ -891,12 +891,14 @@ Provide clear, actionable recommendations."""
         st.divider()
         st.success("💡 **Tip:** Copy any template text above and paste it into the chat input to use it!")
 
-    # Prompt Assistant button above chat input
-    if st.button("💡 Templates", use_container_width=True, help="Open prompt assistant with ready-made templates (note: copy/paste templates manually)"):
-        show_prompt_assistant()
-    
     # Official Streamlit chat input - automatically positioned at bottom
-    prompt = st.chat_input("Ask questions about your documents and data...")
+    prompt = st.chat_input("Ask questions about your documents and data...", key="chat_input")
+    
+    # Templates button - positioned for bottom placement via CSS
+    templates_container = st.container()
+    with templates_container:
+        if st.button("💡 Templates", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
+            show_prompt_assistant()
     
     # Process the prompt when submitted
     if prompt:
