@@ -25,9 +25,9 @@ st.title(lib.APP_TITLE)
 st.divider()
 
 # Steps - updated to show position 1 in the new 4-step process
-lib.steps(0)
+# lib.steps(0)
 
-st.divider()
+# st.divider()
 
 st.header("Anonymize Content")
 

@@ -25,9 +25,9 @@ st.title(lib.APP_TITLE)
 st.divider()
 
 # Steps - updated to show position 2 in the new 4-step process
-lib.steps(1)
+# lib.steps(1)
 
-st.divider()
+# st.divider()
 
 if "gpt_api_key" not in st.session_state:
     st.header("ChatGPT Tool")
