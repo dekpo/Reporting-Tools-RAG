@@ -107,154 +107,45 @@ if "gpt_api_key" not in st.session_state:
     
 
     if st.button("Submit Your API Key",key="submit_your_api_key_btn1",type="primary"):
-        client = OpenAI(api_key=MY_API_KEY)
-        try:
-            # Check the validity of the API key with the selected model
-            try:
-                # First check if the model exists and is available
-                models = client.models.list()
-                model_available = False
-                available_models = [model.id for model in models.data]
-                
-                # Check if the exact model is available
-                if selected_model in available_models:
-                    model_available = True
-                # Some models might have different names in the API (e.g., gpt-4o might be available as gpt-4o-xxxx)
-                elif any(model_id.startswith(selected_model) for model_id in available_models):
-                    model_available = True
-                    
-                if not model_available:
-                    # If model not available, suggest a fallback
-                    fallback_model = "gpt-3.5-turbo"  # Default fallback
-                    st.warning(f"The selected model '{selected_model}' appears to be unavailable with your API key. Falling back to {fallback_model}.", icon="⚠️")
-                    selected_model = fallback_model
-                    st.session_state["openai_model"] = selected_model
-                
-                # Now try to use the model
-                client.chat.completions.create(
-                    model=selected_model,
-                    messages=[
-                        {"role": "user", "content": "Hello this is a test."}
-                    ],
-                    stream=False,
-                )
-            except Exception as model_error:
-                st.warning(f"Error with model {selected_model}: {model_error}. Trying with gpt-3.5-turbo instead.", icon="⚠️")
-                # Fallback to gpt-3.5-turbo which is widely available
-                client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "user", "content": "Hello this is a test."}
-                    ],
-                    stream=False,
-                )
-                # Update the model to the fallback
-                st.session_state["openai_model"] = "gpt-3.5-turbo"
-                
-        except Exception as e:
-            st.error(f"Your API key is not valid. Please try Again. Error: {str(e)}", icon="⚠️")
-            if 'submit_your_api_key_btn' in st.session_state:
-                del st.session_state.submit_your_api_key_btn
+        # Basic format validation
+        if not MY_API_KEY or not MY_API_KEY.startswith('sk-'):
+            st.error("Please enter a valid OpenAI API key (should start with 'sk-')", icon="⚠️")
         else:
-            st.success(f"Your API key is valid. You will be redirected to the discussion area in few seconds. Using model: {st.session_state['openai_model']}", icon="✅")
-            st.session_state["gpt_api_key"] = MY_API_KEY
-            
-            # Check for existing documents in the persistent storage
-            persist_directory = './chroma_db'
-            if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
-                document_metadata = lib.load_document_metadata(persist_directory)
-                if document_metadata:
-                    with st.spinner("Loading document database..."):
-                        try:
-                            # Initialize ChromaDB client with custom embedding function
-                            if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
-                                # Create custom embedding function
-                                embedding_function = lib.OpenAIEmbeddingFunction(api_key=MY_API_KEY)
-                                
-                                # Create ChromaDB client
-                                import chromadb
-                                from chromadb.config import Settings
-                                
-                                chroma_client = chromadb.PersistentClient(
-                                    path=persist_directory,
-                                    settings=Settings(
-                                        anonymized_telemetry=False,
-                                        allow_reset=True
-                                    )
-                                )
-                                
-                                # Connect to the collection
-                                collection = chroma_client.get_collection(
-                                    name="document_collection", 
-                                    embedding_function=embedding_function
-                                )
-                                
-                                # Store in session state
-                                st.session_state.vector_db = collection
-                                st.session_state.selected_doc_sources = list(document_metadata.keys())
-                                
-                                # If there are documents available, select the first one as the active document
-                                # This allows users to immediately use their saved documents
-                                if document_metadata and "saved_anonymisation" not in st.session_state:
-                                    # Get the most recent document (sorted by timestamp)
-                                    doc_list = []
-                                    for doc_hash, doc_data in document_metadata.items():
-                                        doc_list.append({
-                                            "hash": doc_hash,
-                                            "title": doc_data["title"],
-                                            "timestamp": doc_data.get("timestamp", 0)
-                                        })
-                                    # Sort by timestamp (newest first)
-                                    doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
-                                    
-                                    if doc_list:
-                                        # Set the latest document as the active document
-                                        latest_doc = doc_list[0]
-                                        
-                                        # Get document hash to retrieve full metadata
-                                        doc_hash = latest_doc["hash"]
-                                        
-                                        # Get entities from metadata if available
-                                        entities_data = {
-                                            "Text": [],
-                                            "Replacement": [],
-                                            "Category": []
-                                        }
-                                        
-                                        # Check if this document has stored entities
-                                        if 'entities' in document_metadata[doc_hash]:
-                                            entities_data = document_metadata[doc_hash]['entities']
-                                        
-                                        st.session_state["saved_anonymisation"] = {
-                                            "Title": latest_doc["title"],
-                                            "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                            "Entities": entities_data  # Use stored entities if available
-                                        }
-                                        
-                                        # Also initialize saved_gpt_answers with the same document
-                                        # This ensures the revert page will have access to the document
-                                        st.session_state["saved_gpt_answers"] = {
-                                            "Title": latest_doc["title"],
-                                            "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                            "Data": "",  # Will be populated with conversation content
-                                            "Entities": entities_data,  # Use stored entities if available
-                                            "Attendees": {}
-                                        }
-                        except Exception as e:
-                            st.error(f"Error loading document database: {e}")
-            
-            # Load existing tabular datasets
-            with st.spinner("Loading tabular datasets..."):
-                try:
-                    tabular_datasets = lib.load_tabular_datasets()
-                    if tabular_datasets:
-                        st.session_state.tabular_datasets = tabular_datasets
-                        st.success(f"Loaded {len(tabular_datasets)} tabular dataset(s).")
-                except Exception as e:
-                    st.error(f"Error loading tabular datasets: {e}")
-            
-            time.sleep(1)
-            st.rerun()
+            client = OpenAI(api_key=MY_API_KEY)
+            try:
+                # Simple validation with minimal API call
+                with st.spinner("Validating API key..."):
+                    # Just make a simple models list call - much faster than completion
+                    models = client.models.list()
+                    
+                    # Check if selected model is available (without making a completion call)
+                    available_models = [model.id for model in models.data]
+                    if selected_model not in available_models and not any(model_id.startswith(selected_model) for model_id in available_models):
+                        st.warning(f"Model '{selected_model}' may not be available. Falling back to gpt-3.5-turbo.", icon="⚠️")
+                        selected_model = "gpt-3.5-turbo"
+                        st.session_state["openai_model"] = selected_model
+                    
+                    # Store API key immediately - no need for test completion
+                    st.session_state["gpt_api_key"] = MY_API_KEY
+                    st.success(f"API key validated! Using model: {st.session_state['openai_model']}", icon="✅")
+                    
+                    # Load data sources in background (non-blocking)
+                    st.rerun()
+                    
+            except openai.AuthenticationError:
+                st.error("🔑 **Invalid API Key** - Please check your OpenAI API key and try again.", icon="⚠️")
+                st.info("💡 **Need help?** Get your API key at: https://platform.openai.com/api-keys")
+            except openai.PermissionDeniedError:
+                st.error("🚫 **Access Denied** - Your API key doesn't have permission to access this model.", icon="⚠️")
+                st.info("💡 **Try:** Select a different model or check your OpenAI account permissions.")
+            except openai.RateLimitError:
+                st.error("⏱️ **Rate Limit Reached** - Too many requests. Please wait a moment and try again.", icon="⚠️")
+            except openai.APIConnectionError:
+                st.error("🌐 **Connection Error** - Unable to connect to OpenAI. Please check your internet connection.", icon="⚠️")
+            except Exception as e:
+                # For any other unexpected errors, show a generic friendly message
+                st.error("❌ **Something went wrong** - Please check your API key and try again.", icon="⚠️")
+                st.info("💡 **Need help?** Make sure your API key starts with 'sk-' and is valid.")
 else:
     st.header(f"ChatGPT Discussion ({st.session_state["openai_model"] })")
 
@@ -269,6 +160,103 @@ else:
 
     # Initialize client
     client = OpenAI(api_key=st.session_state["gpt_api_key"])
+
+    # Load data sources on first access to chat area (lazy loading)
+    if "data_sources_loaded" not in st.session_state:
+        with st.spinner("Loading your data sources..."):
+            # Check for existing documents in the persistent storage
+            persist_directory = './chroma_db'
+            if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
+                document_metadata = lib.load_document_metadata(persist_directory)
+                if document_metadata:
+                    try:
+                        # Initialize ChromaDB client with custom embedding function
+                        if hasattr(lib, 'RAG_AVAILABLE') and lib.RAG_AVAILABLE:
+                            # Create custom embedding function
+                            embedding_function = lib.OpenAIEmbeddingFunction(api_key=st.session_state["gpt_api_key"])
+                            
+                            # Create ChromaDB client
+                            import chromadb
+                            from chromadb.config import Settings
+                            
+                            chroma_client = chromadb.PersistentClient(
+                                path=persist_directory,
+                                settings=Settings(
+                                    anonymized_telemetry=False,
+                                    allow_reset=True
+                                )
+                            )
+                            
+                            # Connect to the collection
+                            collection = chroma_client.get_collection(
+                                name="document_collection", 
+                                embedding_function=embedding_function
+                            )
+                            
+                            # Store in session state
+                            st.session_state.vector_db = collection
+                            st.session_state.selected_doc_sources = list(document_metadata.keys())
+                            
+                            # If there are documents available, select the first one as the active document
+                            # This allows users to immediately use their saved documents
+                            if document_metadata and "saved_anonymisation" not in st.session_state:
+                                # Get the most recent document (sorted by timestamp)
+                                doc_list = []
+                                for doc_hash, doc_data in document_metadata.items():
+                                    doc_list.append({
+                                        "hash": doc_hash,
+                                        "title": doc_data["title"],
+                                        "timestamp": doc_data.get("timestamp", 0)
+                                    })
+                                # Sort by timestamp (newest first)
+                                doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
+                                
+                                if doc_list:
+                                    # Set the latest document as the active document
+                                    latest_doc = doc_list[0]
+                                    
+                                    # Get document hash to retrieve full metadata
+                                    doc_hash = latest_doc["hash"]
+                                    
+                                    # Get entities from metadata if available
+                                    entities_data = {
+                                        "Text": [],
+                                        "Replacement": [],
+                                        "Category": []
+                                    }
+                                    
+                                    # Check if this document has stored entities
+                                    if 'entities' in document_metadata[doc_hash]:
+                                        entities_data = document_metadata[doc_hash]['entities']
+                                    
+                                    st.session_state["saved_anonymisation"] = {
+                                        "Title": latest_doc["title"],
+                                        "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                        "Entities": entities_data  # Use stored entities if available
+                                    }
+                                    
+                                    # Also initialize saved_gpt_answers with the same document
+                                    # This ensures the revert page will have access to the document
+                                    st.session_state["saved_gpt_answers"] = {
+                                        "Title": latest_doc["title"],
+                                        "Time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                        "Data": "",  # Will be populated with conversation content
+                                        "Entities": entities_data,  # Use stored entities if available
+                                        "Attendees": {}
+                                    }
+                    except Exception as e:
+                        st.error(f"Error loading document database: {e}")
+            
+            # Load existing tabular datasets
+            try:
+                tabular_datasets = lib.load_tabular_datasets()
+                if tabular_datasets:
+                    st.session_state.tabular_datasets = tabular_datasets
+            except Exception as e:
+                st.error(f"Error loading tabular datasets: {e}")
+            
+            # Mark data sources as loaded
+            st.session_state.data_sources_loaded = True
 
     # =================== SOURCES EXPANDER ===================
     with st.expander("📊 Data Sources Management", expanded=False):
