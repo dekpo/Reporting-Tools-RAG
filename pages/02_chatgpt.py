@@ -665,6 +665,36 @@ else:
         
         st.info(f"📊 Ready to analyze: {', '.join(available_sources)}")
 
+    # Welcome message for first-time users (when no chat history exists)
+    if not st.session_state.messages:
+        with st.chat_message("assistant"):
+            st.markdown("## 👋 Hello! How can I help you today?")
+            
+            # Create a concise welcome message based on available data sources
+            if has_documents and has_datasets:
+                welcome_msg = """I can analyze your **documents** and **datasets** to help you:
+• Summarize key insights • Create charts and visualizations • Extract action items • Generate reports
+
+💡 **Try asking:** *"What are the key insights from my data?"* or *"Create a summary with charts"*"""
+            
+            elif has_documents:
+                welcome_msg = """I can analyze your **text documents** to help you:
+• Summarize key points • Extract action items • Answer specific questions • Create reports
+
+💡 **Try asking:** *"What were the main decisions?"* or *"Create a summary of key themes"*"""
+            
+            elif has_datasets:
+                welcome_msg = """I can analyze your **tabular data** to help you:
+• Create charts and visualizations • Analyze trends and patterns • Generate insights
+
+💡 **Try asking:** *"Show me the top 10 items"* or *"Create a trend chart over time"*"""
+            
+            else:
+                welcome_msg = """I can help you analyze documents and datasets! 
+🚀 **To get started:** Upload data on the Home page, then ask me questions about it."""
+            
+            st.markdown(welcome_msg)
+
     # Display chat messages directly (following Streamlit best practices)
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -897,7 +927,7 @@ Provide clear, actionable recommendations."""
     # Templates button - positioned for bottom placement via CSS
     templates_container = st.container()
     with templates_container:
-        if st.button("💡 Prompt Assistant", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
+        if st.button("💡 Get Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
             show_prompt_assistant()
     
     # Process the prompt when submitted
