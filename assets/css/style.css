@@ -177,8 +177,9 @@ div[data-testid="stMarkdownContainer"] p a.link-primary{
     text-decoration: none;
 }
 
-div[data-testid="stElementContainer"].st-key-templates_bottom_button {
+/* Bottom action buttons container */
+div[data-testid="stVerticalBlock"].st-key-bottom_buttons_container {
     z-index: 100;
-    position:fixed;
-    bottom:15px;
+    position: fixed;
+    bottom: 0px;
 }

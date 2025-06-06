@@ -258,9 +258,10 @@ else:
             # Mark data sources as loaded
             st.session_state.data_sources_loaded = True
 
-    # =================== SOURCES EXPANDER ===================
-    with st.expander("📊 Data Sources Management", expanded=False):
-        st.markdown("Manage your document and tabular data sources for AI analysis.")
+    # Data Sources Dialog Function
+    @st.dialog("📊 Data Sources Management", width="large")
+    def show_data_sources():
+        st.markdown("**Manage your document and tabular data sources for AI analysis**")
         
         # Document Sources Section
         if "vector_db" in st.session_state and st.session_state.vector_db is not None:
@@ -466,9 +467,10 @@ else:
             st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to add datasets.")
             st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
 
-    # =================== SETTINGS EXPANDER ===================
-    with st.expander("⚙️ Model & System Settings", expanded=False):
-        st.markdown("Configure AI model settings and advanced options.")
+    # Model Settings Dialog Function
+    @st.dialog("⚙️ Model Settings", width="large")
+    def show_model_settings():
+        st.markdown("**Configure AI model settings and advanced options**")
         
         # Model Settings Section
         st.subheader("🤖 AI Model Configuration")
@@ -566,10 +568,6 @@ else:
                 st.session_state.max_iterations = 10
                 st.success("Settings reset to defaults!")
 
-    # =================== MAIN CHAT AREA ===================
-    st.divider()
-    st.markdown("### 💬 Chat Discussion")
-
     # Process document and create vector database if not already processed
     if "saved_anonymisation" in st.session_state:
         # Generate a unique key for this anonymization
@@ -656,7 +654,7 @@ else:
     # Welcome message for first-time users (when no chat history exists)
     if not st.session_state.messages:
         with st.chat_message("assistant"):
-            st.markdown("## 👋 Hello! How can I help you today?")
+            st.markdown("### Hello! How can I help you today?")
             
             # Create a concise welcome message based on available data sources
             if has_documents and has_datasets:
@@ -912,11 +910,22 @@ Provide clear, actionable recommendations."""
     # Official Streamlit chat input - automatically positioned at bottom
     prompt = st.chat_input("Ask questions about your documents and data...", key="chat_input")
     
-    # Templates button - positioned for bottom placement via CSS
-    templates_container = st.container()
-    with templates_container:
-        if st.button("💡 Get Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
-            show_prompt_assistant()
+    # Bottom action buttons - positioned for fixed placement via CSS
+    bottom_buttons_container = st.container(key="bottom_buttons_container")
+    with bottom_buttons_container:
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("💡 Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
+                show_prompt_assistant()
+        
+        with col2:
+            if st.button("📊 Data Sources", key="data_sources_bottom_button", use_container_width=True, help="Manage your document and tabular data sources"):
+                show_data_sources()
+        
+        with col3:
+            if st.button("⚙️ Model Settings", key="model_settings_bottom_button", use_container_width=True, help="Configure AI model and system settings"):
+                show_model_settings()
     
     # Process the prompt when submitted
     if prompt:
