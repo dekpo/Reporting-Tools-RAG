@@ -166,20 +166,74 @@ def sidebar():
     st.sidebar.page_link(page="pages/03_revert.py",label="Reverse Anonymization",icon=":material/comment:")
     st.sidebar.page_link(page="pages/04_help.py",label="Help & Documentation",icon=":material/help:")
 
-    if "saved_content" in st.session_state or "saved_anonymisation" in st.session_state or "saved_gpt_answers" in st.session_state:
-        st.sidebar.header(":floppy_disk: Your Session",divider=True)
-        if "saved_content" in st.session_state:
-            st.sidebar.write(":page_with_curl: **Extracted Content**")
-            if st.sidebar.button(label=f":wastebasket: {st.session_state['saved_content']['Title'][:18]}...",type="secondary",key="del_button02",use_container_width=True):
-                del_dialog("saved_content")
-        if "saved_anonymisation" in st.session_state:
-            st.sidebar.write(":speech_balloon: **Anonymized Content**")
-            if st.sidebar.button(label=f":wastebasket: {st.session_state['saved_anonymisation']['Title'][:18]}...",type="secondary",key="del_button03",use_container_width=True):
-                del_dialog("saved_anonymisation")
-        if "saved_gpt_answers" in st.session_state:
-            st.sidebar.write(":robot_face: **ChatGPT Answers**")
-            if st.sidebar.button(label=f":wastebasket: {st.session_state['saved_gpt_answers']['Title'][:18]}...",type="secondary",key="del_button04",use_container_width=True):
-                del_dialog("saved_gpt_answers")
+    # Check for persistent data sources
+    persist_directory = './chroma_db'
+    document_metadata = {}
+    tabular_metadata = {}
+    
+    # Load document sources
+    if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
+        document_metadata = load_document_metadata(persist_directory)
+    
+    # Load tabular sources
+    tabular_metadata = get_tabular_metadata()
+    
+    # Show backup section if we have any persistent sources
+    if document_metadata or tabular_metadata:
+        st.sidebar.header(":floppy_disk: Your Backup",divider=True)
+        
+        # Document Sources
+        if document_metadata:
+            st.sidebar.write(":page_with_curl: **Document Sources**")
+            # Convert metadata to list and sort by timestamp (newest first)
+            doc_list = []
+            for doc_hash, doc_data in document_metadata.items():
+                doc_list.append({
+                    "title": doc_data["title"],
+                    "timestamp": doc_data.get("timestamp", 0)
+                })
+            doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
+            
+            # Display truncated document names
+            for doc in doc_list[:5]:  # Show max 5 to avoid sidebar overflow
+                truncated_title = doc["title"][:15] + "..." if len(doc["title"]) > 15 else doc["title"]
+                st.sidebar.caption(f"• {truncated_title}")
+            
+            if len(doc_list) > 5:
+                st.sidebar.caption(f"• ... and {len(doc_list) - 5} more")
+        
+        # Tabular Data Sources
+        if tabular_metadata:
+            st.sidebar.write(":bar_chart: **Tabular Data Sources**")
+            # Convert metadata to list and sort by timestamp (newest first)
+            dataset_list = []
+            for file_hash, dataset_data in tabular_metadata.items():
+                dataset_list.append({
+                    "title": dataset_data["title"],
+                    "timestamp": dataset_data.get("timestamp", 0)
+                })
+            dataset_list.sort(key=lambda x: x["timestamp"], reverse=True)
+            
+            # Display truncated dataset names
+            for dataset in dataset_list[:5]:  # Show max 5 to avoid sidebar overflow
+                truncated_title = dataset["title"][:15] + "..." if len(dataset["title"]) > 15 else dataset["title"]
+                st.sidebar.caption(f"• {truncated_title}")
+            
+            if len(dataset_list) > 5:
+                st.sidebar.caption(f"• ... and {len(dataset_list) - 5} more")
+        
+        # Manage Sources button
+        if st.sidebar.button("🔧 Manage Sources", key="manage_sources_sidebar", use_container_width=True, help="Open data sources management dialog"):
+            st.session_state["show_sources_dialog"] = True
+    
+    # Check if dialog should be shown
+    if st.session_state.get("show_sources_dialog", False):
+        show_data_sources()
+        # Reset the dialog state
+        st.session_state["show_sources_dialog"] = False
+    
+    # Keep session variables working behind the scenes for workflow
+    # (Hidden but still functional for the app logic)
     
     st.sidebar.divider()
     st.sidebar.text(f"Release Version {APP_VERSION}")
@@ -2210,3 +2264,213 @@ def optimize_agent_result(result):
     optimized_result["intermediate_steps"] = optimized_steps
     
     return optimized_result
+
+# Data Sources Dialog Function
+@st.dialog("📊 Data Sources Management", width="large")
+def show_data_sources():
+    st.markdown("**Manage your document and tabular data sources for AI analysis**")
+    
+    # Check available data sources for smart expansion
+    has_documents = "vector_db" in st.session_state and st.session_state.vector_db is not None
+    has_datasets = "tabular_datasets" in st.session_state and st.session_state.tabular_datasets
+    
+    # Document Sources Section with Expander
+    with st.expander("📄 Document Sources", expanded=has_documents and not has_datasets):
+        if "vector_db" in st.session_state and st.session_state.vector_db is not None:
+            # Load document metadata
+            persist_directory = './chroma_db'
+            document_metadata = load_document_metadata(persist_directory)
+            
+            if document_metadata:
+                st.markdown("*Select documents to use as sources for your questions*")
+                
+                # Convert metadata to a more usable format for display
+                doc_list = []
+                for doc_hash, doc_data in document_metadata.items():
+                    doc_list.append({
+                        "hash": doc_hash,
+                        "title": doc_data["title"],
+                        "chunks": doc_data["chunks"],
+                        "timestamp": doc_data.get("timestamp", 0),
+                        "active": doc_data.get("active", True)
+                    })
+                
+                # Sort by timestamp (newest first)
+                doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
+                
+                # Create selection interface
+                selected_docs = []
+                for doc in doc_list:
+                    col1, col2, col3 = st.columns([0.6, 0.15, 0.25])
+                    with col1:
+                        selected = st.checkbox(
+                            f"{doc['title']} ({doc['chunks']} chunks)", 
+                            value=doc['active'],
+                            key=f"doc_select_{doc['hash']}"
+                        )
+                        if selected:
+                            selected_docs.append(doc['hash'])
+                    
+                    with col2:
+                        from datetime import datetime
+                        timestamp = datetime.fromtimestamp(doc["timestamp"])
+                        st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                    
+                    with col3:
+                        if st.button("Remove", key=f"remove_{doc['hash']}"):
+                            if st.session_state.get("confirm_delete") == doc['hash']:
+                                # If already confirmed, perform the deletion
+                                with st.spinner(f"Deleting '{doc['title']}'..."):
+                                    success = delete_document_from_vector_db(doc['hash'])
+                                    if success:
+                                        st.rerun()
+                                # Clear confirmation state
+                                st.session_state["confirm_delete"] = None
+                            else:
+                                # Set confirmation state and show confirmation message
+                                st.session_state["confirm_delete"] = doc['hash']
+                                st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+                
+                # Store selected documents in session state
+                if "selected_doc_sources" not in st.session_state or st.session_state.selected_doc_sources != selected_docs:
+                    st.session_state.selected_doc_sources = selected_docs
+                
+                # Update metadata with active status
+                for doc_hash in document_metadata:
+                    document_metadata[doc_hash]['active'] = doc_hash in selected_docs
+                save_document_metadata(persist_directory, document_metadata)
+                
+                # Add Clear Vector Database button at the end of document list
+                st.divider()
+                if hasattr(st.session_state, 'RAG_AVAILABLE') or RAG_AVAILABLE:
+                    # Warning message before the button
+                    st.warning("This will remove all documents from the database. This action cannot be undone.", icon="⚠️")
+                    
+                    # Full-width button with confirmation
+                    if st.button("Clear All Documents", type="secondary", use_container_width=True):
+                        # Show confirmation dialog
+                        if st.session_state.get("confirm_clear_all"):
+                            with st.spinner("Clearing vector database..."):
+                                success = clear_vector_database()
+                                if success:
+                                    st.success("Vector database cleared successfully!")
+                                    # Also clear the vector_db from session state
+                                    if "vector_db" in st.session_state:
+                                        del st.session_state["vector_db"]
+                                    if "selected_doc_sources" in st.session_state:
+                                        del st.session_state["selected_doc_sources"]
+                                    if "processed_anonymizations" in st.session_state:
+                                        del st.session_state["processed_anonymizations"]
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to clear vector database. If you're seeing a file access error, this could be due to Windows file locks. Try restarting the application.")
+                                    if st.button("Restart Application", key="restart_app_button"):
+                                        st.rerun()
+                            # Clear confirmation state
+                            st.session_state["confirm_clear_all"] = False
+                        else:
+                            # Set confirmation state and show confirmation message
+                            st.session_state["confirm_clear_all"] = True
+                            st.error("Click 'Clear All Documents' again to confirm deletion of ALL documents.", icon="⚠️")
+            else:
+                st.info("No documents found in the database. Process a document to add it to the sources.")
+        else:
+            st.info("📄 No document sources loaded. Upload documents on the Home page and process them to add document sources.")
+            st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
+
+    # Tabular Dataset Sources Section with Expander
+    with st.expander("📊 Tabular Data Sources", expanded=has_datasets and not has_documents):
+        if "tabular_datasets" in st.session_state and st.session_state.tabular_datasets:
+            # Load tabular metadata
+            tabular_metadata = get_tabular_metadata()
+            
+            if tabular_metadata:
+                st.markdown("*Select datasets to use as sources for your questions*")
+                
+                # Convert metadata to a more usable format for display
+                dataset_list = []
+                for file_hash, dataset_data in tabular_metadata.items():
+                    dataset_list.append({
+                        "hash": file_hash,
+                        "title": dataset_data["title"],
+                        "shape": dataset_data["shape"],
+                        "columns": dataset_data["columns"],
+                        "timestamp": dataset_data.get("timestamp", 0),
+                        "active": dataset_data.get("active", True)
+                    })
+                
+                # Sort by timestamp (newest first)
+                dataset_list.sort(key=lambda x: x["timestamp"], reverse=True)
+                
+                # Create selection interface
+                selected_datasets = []
+                for dataset in dataset_list:
+                    col1, col2, col3 = st.columns([0.6, 0.15, 0.25])
+                    with col1:
+                        selected = st.checkbox(
+                            f"{dataset['title']} ({dataset['shape'][0]} rows, {dataset['shape'][1]} cols)", 
+                            value=dataset['active'],
+                            key=f"dataset_select_{dataset['hash']}"
+                        )
+                        if selected:
+                            selected_datasets.append(dataset['title'])
+                    
+                    with col2:
+                        from datetime import datetime
+                        timestamp = datetime.fromtimestamp(dataset["timestamp"])
+                        st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                    
+                    with col3:
+                        if st.button("Remove", key=f"remove_dataset_{dataset['hash']}"):
+                            if st.session_state.get("confirm_delete_dataset") == dataset['hash']:
+                                # If already confirmed, perform the deletion
+                                with st.spinner(f"Deleting '{dataset['title']}'..."):
+                                    success = delete_tabular_dataset(dataset['hash'])
+                                    if success:
+                                        st.rerun()
+                                # Clear confirmation state
+                                st.session_state["confirm_delete_dataset"] = None
+                            else:
+                                # Set confirmation state and show confirmation message
+                                st.session_state["confirm_delete_dataset"] = dataset['hash']
+                                st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+                
+                # Store selected datasets in session state
+                if "selected_datasets" not in st.session_state or st.session_state.selected_datasets != selected_datasets:
+                    st.session_state.selected_datasets = selected_datasets
+                
+                # Update metadata with active status
+                for file_hash, dataset_data in tabular_metadata.items():
+                    dataset_data['active'] = dataset_data['title'] in selected_datasets
+                # Note: We would need to add a save function for tabular metadata if we want to persist active status
+                
+                # Add Clear All Datasets button
+                st.divider()
+                st.warning("This will remove all datasets from storage. This action cannot be undone.", icon="⚠️")
+                
+                if st.button("Clear All Datasets", type="secondary", use_container_width=True):
+                    if st.session_state.get("confirm_clear_all_datasets"):
+                        with st.spinner("Clearing all tabular datasets..."):
+                            success = clear_all_tabular_data()
+                            if success:
+                                st.success("All datasets cleared successfully!")
+                                # Clear from session state
+                                if "tabular_datasets" in st.session_state:
+                                    del st.session_state["tabular_datasets"]
+                                if "selected_datasets" in st.session_state:
+                                    del st.session_state["selected_datasets"]
+                                st.rerun()
+                            else:
+                                st.error("Failed to clear datasets.")
+                        # Clear confirmation state
+                        st.session_state["confirm_clear_all_datasets"] = False
+                    else:
+                        # Set confirmation state and show confirmation message
+                        st.session_state["confirm_clear_all_datasets"] = True
+                        st.error("Click 'Clear All Datasets' again to confirm deletion of ALL datasets.", icon="⚠️")
+            else:
+                st.info("No datasets found in storage. Upload a CSV or Excel file to add datasets.")
+                st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
+        else:
+            st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to add datasets.")
+            st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)

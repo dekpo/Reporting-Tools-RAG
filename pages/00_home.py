@@ -173,89 +173,11 @@ def process_excel_file(file_content, file_hash):
     except Exception as e:
         return None, False
 
-# Check for existing documents in the ChromaDB database
-persist_directory = './chroma_db'
-if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
-    document_metadata = lib.load_document_metadata(persist_directory)
-    if document_metadata:
-        # Import datetime here since it's only needed if documents exist
-        from datetime import datetime
-        
-        col1, col2 = st.columns([0.7, 0.3])
-        with col1:
-            st.info(f"Found {len(document_metadata)} document(s) already stored in the database. You can continue working with them.")
-        with col2:
-            st.page_link(page="pages/02_chatgpt.py", label="Go to ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
-            
-        # Show document titles in an expandable section
-        with st.expander("View stored documents"):
-            # Convert metadata to a more usable format for display
-            doc_list = []
-            for doc_hash, doc_data in document_metadata.items():
-                doc_list.append({
-                    "title": doc_data["title"],
-                    "timestamp": doc_data.get("timestamp", 0)
-                })
-            
-            # Sort by timestamp (newest first)
-            doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
-            
-            # Display document titles
-            for i, doc in enumerate(doc_list):
-                try:
-                    if doc["timestamp"] > 0:
-                        timestamp = datetime.fromtimestamp(doc["timestamp"])
-                        date_str = timestamp.strftime('%Y-%m-%d')
-                    else:
-                        date_str = "Unknown date"
-                except Exception:
-                    date_str = "Unknown date"
-                
-                st.write(f"**{i+1}.** {doc['title']} _(Added: {date_str})_")
 
-# Check for existing tabular datasets
-tabular_metadata = lib.get_tabular_metadata()
-if tabular_metadata:
-    # Import datetime here since it's only needed if datasets exist
-    from datetime import datetime
-    
-    col1, col2 = st.columns([0.7, 0.3])
-    with col1:
-        st.info(f"Found {len(tabular_metadata)} dataset(s) already stored. You can continue working with them.")
-    with col2:
-        st.page_link(page="pages/02_chatgpt.py", label="Go to ChatGPT Tool", icon=":material/hexagon:", use_container_width=True)
-        
-    # Show dataset titles in an expandable section
-    with st.expander("View stored datasets"):
-        # Convert metadata to a more usable format for display
-        dataset_list = []
-        for file_hash, dataset_data in tabular_metadata.items():
-            dataset_list.append({
-                "title": dataset_data["title"],
-                "shape": dataset_data["shape"],
-                "columns": dataset_data["columns"],
-                "timestamp": dataset_data.get("timestamp", 0)
-            })
-        
-        # Sort by timestamp (newest first)
-        dataset_list.sort(key=lambda x: x["timestamp"], reverse=True)
-        
-        # Display dataset titles
-        for i, dataset in enumerate(dataset_list):
-            try:
-                if dataset["timestamp"] > 0:
-                    timestamp = datetime.fromtimestamp(dataset["timestamp"])
-                    date_str = timestamp.strftime('%Y-%m-%d')
-                else:
-                    date_str = "Unknown date"
-            except Exception:
-                date_str = "Unknown date"
-            
-            st.write(f"**{i+1}.** {dataset['title']} _{dataset['shape'][0]} rows, {dataset['shape'][1]} columns_ _(Added: {date_str})_")
 
 st.markdown("<p>Welcome to this set of tools! Upload your document, anonymize content, ask ChatGPT for insights, and revert anonymization when needed.</p>",unsafe_allow_html=True)
 
-st.header("Upload Your Document")
+st.header("Upload New Document")
 
 st.markdown("<p>Upload your file to begin processing. Choose from meeting transcripts, text documents, or data files.</p>", unsafe_allow_html=True)
 
