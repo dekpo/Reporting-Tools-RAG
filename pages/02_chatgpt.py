@@ -661,23 +661,23 @@ else:
                 welcome_msg = """I can analyze your **documents** and **datasets** to help you:
 • Summarize key insights • Create charts and visualizations • Extract action items • Generate reports
 
-💡 **Try asking:** *"What are the key insights from my data?"* or *"Create a summary with charts"*"""
+💡 **Try asking:** *"What are the key insights from my data?"* or *"Create a summary with charts"* or click the **Prompt Ideas** button below"""
             
             elif has_documents:
                 welcome_msg = """I can analyze your **text documents** to help you:
 • Summarize key points • Extract action items • Answer specific questions • Create reports
 
-💡 **Try asking:** *"What were the main decisions?"* or *"Create a summary of key themes"*"""
+💡 **Try asking:** *"What were the main decisions?"* or *"Create a summary of key themes"* or click the **Prompt Ideas** button below"""
             
             elif has_datasets:
                 welcome_msg = """I can analyze your **tabular data** to help you:
 • Create charts and visualizations • Analyze trends and patterns • Generate insights
 
-💡 **Try asking:** *"Show me the top 10 items"* or *"Create a trend chart over time"*"""
+💡 **Try asking:** *"Show me the top 10 items"* or *"Create a trend chart over time"* or click the **Prompt Ideas** button below"""
             
             else:
                 welcome_msg = """I can help you analyze documents and datasets! 
-🚀 **To get started:** Upload data on the Home page, then ask me questions about it."""
+🚀 **To get started:** Upload data on the Home page, then ask me questions about it or click the **Prompt Ideas** button below"""
             
             st.markdown(welcome_msg)
 
@@ -734,37 +734,28 @@ else:
     # Prompt Assistant Dialog Function
     @st.dialog("💡 Prompt Assistant & Templates", width="large")
     def show_prompt_assistant():
-        # Use custom CSS to make dialog much wider
-        st.markdown("""
-        <style>
-        .stDialog > div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
-            width: 98vw !important;
-            max-width: 1600px !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
         st.markdown("**Quick access to proven prompt templates for better AI results**")
         
         # Check available data sources for smart suggestions
         has_documents = ("vector_db" in st.session_state and st.session_state.vector_db is not None) or ("saved_anonymisation" in st.session_state)
         has_datasets = "tabular_datasets" in st.session_state and st.session_state.tabular_datasets
         
-        # Smart suggestions
-        col1, col2 = st.columns(2)
-        with col1:
-            if has_documents:
-                st.info("📄 **Document sources loaded** - Use text analysis templates")
-        with col2:
-            if has_datasets:
-                st.info("📊 **Datasets loaded** - Use data analysis templates")
+        # Smart suggestions info
+        if has_documents and has_datasets:
+            st.info("📄📊 Both document and dataset sources are loaded - use any template below!")
+        elif has_documents:
+            st.info("📄 Document sources loaded - text analysis templates are most relevant")
+        elif has_datasets:
+            st.info("📊 Dataset sources loaded - data analysis templates are most relevant")
+        else:
+            st.info("💡 Upload documents or datasets on the Home page to get personalized suggestions")
         
-        # Simple layout - no tabs, just organized sections
-        st.markdown("### 📊 Text Analysis Templates")
-        
-        text_templates = {
-            "📝 Meeting Report": {
-                "template": """Create a professional meeting report with this structure:
+        # Text Analysis Templates Section with Expander
+        with st.expander("📊 Text Analysis Templates", expanded=has_documents and not has_datasets):
+            st.markdown("*Perfect for analyzing documents, transcripts, and text content*")
+            
+            text_templates = {
+                "📝 Meeting Report": """Create a professional meeting report with this structure:
 
 **Executive Summary:** Key outcomes and decisions
 **Discussion Points:** Main topics covered  
@@ -772,21 +763,17 @@ else:
 **Action Items:** Who does what by when
 **Next Steps:** Follow-up actions
 
-Write in formal, professional tone suitable for organizational reporting."""
-            },
-            
-            "⚡ Quick Summary": {
-                "template": """Provide a concise 3-paragraph summary:
+Write in formal, professional tone suitable for organizational reporting.""",
+                
+                "⚡ Quick Summary": """Provide a concise 3-paragraph summary:
 
 **Paragraph 1:** Main focus and key topics discussed
 **Paragraph 2:** Primary conclusions, decisions, or findings  
 **Paragraph 3:** Next steps, recommendations, or actions required
 
-Keep each paragraph to 3-4 sentences maximum."""
-            },
-            
-            "🎯 Action Items": {
-                "template": """Extract all actionable elements:
+Keep each paragraph to 3-4 sentences maximum.""",
+                
+                "🎯 Action Items": """Extract all actionable elements:
 
 **Immediate Actions:** Tasks for next 1-2 weeks
 **Medium-term Actions:** Tasks for next 1-3 months
@@ -794,11 +781,9 @@ Keep each paragraph to 3-4 sentences maximum."""
 **Responsible Parties:** Who is accountable for each action
 **Dependencies:** Prerequisites for each action
 
-Format as clear action plan with timelines."""
-            },
-            
-            "📋 Key Themes": {
-                "template": """Identify and organize the main themes:
+Format as clear action plan with timelines.""",
+                
+                "📋 Key Themes": """Identify and organize the main themes:
 
 1. **Theme Identification:** List 3-5 major themes
 2. **Content Organization:** Group relevant points under each theme
@@ -807,23 +792,19 @@ Format as clear action plan with timelines."""
 
 Present findings in clear, structured format."""
             }
-        }
+            
+            for title, template in text_templates.items():
+                st.markdown(f"**{title}**")
+                with st.container(border=True):
+                    st.text_area("Template content:", value=template, height=150, key=f"text_template_{title}", label_visibility="collapsed")
+                st.markdown("---")
         
-        cols = st.columns(4)
-        for i, (title, details) in enumerate(text_templates.items()):
-            with cols[i % 4]:
-                with st.container():
-                    st.markdown(f"**{title}**")
-                    if st.button(f"Copy Template", key=f"text_{i}", use_container_width=True):
-                        st.code(details['template'], language=None)
-                        st.info("📋 Template shown above - copy and paste into chat input!")
-        
-        st.divider()
-        st.markdown("### 📈 Data Analysis Templates")
-        
-        data_templates = {
-            "📊 Data Overview": {
-                "template": """Analyze this dataset and provide:
+        # Data Analysis Templates Section with Expander
+        with st.expander("📈 Data Analysis Templates", expanded=has_datasets and not has_documents):
+            st.markdown("*Perfect for analyzing CSV files, Excel data, and tabular information*")
+            
+            data_templates = {
+                "📊 Data Overview": """Analyze this dataset and provide:
 
 **Data Structure:** Number of rows, columns, data types
 **Key Statistics:** Summary statistics for numerical columns
@@ -831,22 +812,18 @@ Present findings in clear, structured format."""
 **Top Insights:** 5 most interesting patterns or findings
 **Recommended Charts:** Best visualizations for this data
 
-Be specific about column names and values."""
-            },
-            
-            "📈 Create Charts": {
-                "template": """Create these visualizations from the data:
+Be specific about column names and values.""",
+                
+                "📈 Create Charts": """Create these visualizations from the data:
 
 1. Bar chart showing top 10 values by the main metric
 2. Line chart showing trends over time (if time data exists)
 3. Summary statistics table for key numerical columns
 4. Distribution chart for the most important variable
 
-Include clear titles and labels. Suggest additional charts if helpful."""
-            },
-            
-            "🔍 Trend Analysis": {
-                "template": """Analyze trends and patterns in this data:
+Include clear titles and labels. Suggest additional charts if helpful.""",
+                
+                "🔍 Trend Analysis": """Analyze trends and patterns in this data:
 
 **Overall Trends:** General direction and changes over time
 **Key Patterns:** Notable increases, decreases, or cyclical patterns  
@@ -854,11 +831,9 @@ Include clear titles and labels. Suggest additional charts if helpful."""
 **Relationships:** Correlations between different variables
 **Time-based Charts:** Visualizations showing temporal patterns
 
-Focus on actionable insights."""
-            },
-            
-            "⚖️ Compare Groups": {
-                "template": """Compare different groups or categories in this data:
+Focus on actionable insights.""",
+                
+                "⚖️ Compare Groups": """Compare different groups or categories in this data:
 
 **Performance Comparison:** Which groups perform better in key metrics
 **Key Differences:** How groups differ across important measures
@@ -868,44 +843,40 @@ Focus on actionable insights."""
 
 Provide clear, actionable recommendations."""
             }
-        }
+            
+            for title, template in data_templates.items():
+                st.markdown(f"**{title}**")
+                with st.container(border=True):
+                    st.text_area("Template content:", value=template, height=150, key=f"data_template_{title}", label_visibility="collapsed")
+                st.markdown("---")
         
-        cols = st.columns(4)
-        for i, (title, details) in enumerate(data_templates.items()):
-            with cols[i % 4]:
-                with st.container():
-                    st.markdown(f"**{title}**")
-                    if st.button(f"Copy Template", key=f"data_{i}", use_container_width=True):
-                        st.code(details['template'], language=None)
-                        st.info("📋 Template shown above - copy and paste into chat input!")
+        # Quick Starters Section with Expander
+        with st.expander("🚀 Quick Starters", expanded=not has_documents and not has_datasets):
+            st.markdown("*Simple, ready-to-use prompts for quick analysis*")
+            
+            quick_templates = {
+                "📋 What's in this data?": "Analyze this dataset and tell me what's most interesting. Show me the key patterns, trends, and create 2-3 charts that best represent the data.",
+                
+                "📊 Show me charts": "Create 3 different charts from this data that show the most important insights. Use bar charts, line charts, or other appropriate visualizations.",
+                
+                "🔍 Find patterns": "Look for interesting patterns, trends, and relationships in this data. Highlight anything unusual or noteworthy.",
+                
+                "📈 Executive summary": "Create an executive summary of this data suitable for leadership, including key metrics, trends, and 1-2 supporting charts.",
+                
+                "🎯 Action insights": "Analyze this data and provide actionable insights and recommendations based on what the data shows.",
+                
+                "📑 Meeting summary": "Summarize this meeting transcript with key decisions, action items, and next steps."
+            }
+            
+            for title, template in quick_templates.items():
+                st.markdown(f"**{title}**")
+                with st.container(border=True):
+                    st.text_area("Template content:", value=template, height=80, key=f"quick_template_{title}", label_visibility="collapsed")
+                st.markdown("---")
         
+        # Usage instructions
         st.divider()
-        st.markdown("### 🚀 Quick Starters")
-        
-        quick_templates = {
-            "📋 What's in this data?": "Analyze this dataset and tell me what's most interesting. Show me the key patterns, trends, and create 2-3 charts that best represent the data.",
-            
-            "📊 Show me charts": "Create 3 different charts from this data that show the most important insights. Use bar charts, line charts, or other appropriate visualizations.",
-            
-            "🔍 Find patterns": "Look for interesting patterns, trends, and relationships in this data. Highlight anything unusual or noteworthy.",
-            
-            "📈 Executive summary": "Create an executive summary of this data suitable for leadership, including key metrics, trends, and 1-2 supporting charts.",
-            
-            "🎯 Action insights": "Analyze this data and provide actionable insights and recommendations based on what the data shows.",
-            
-            "📑 Meeting summary": "Summarize this meeting transcript with key decisions, action items, and next steps."
-        }
-        
-        cols = st.columns(3)
-        for i, (title, template) in enumerate(quick_templates.items()):
-            with cols[i % 3]:
-                if st.button(title, key=f"quick_{i}", use_container_width=True):
-                    st.code(template, language=None)
-                    st.info("📋 Template shown above - copy and paste into chat input!")
-        
-        # Simple tips at bottom
-        st.divider()
-        st.success("💡 **Tip:** Copy any template text above and paste it into the chat input to use it!")
+        st.success("💡 **How to use:** Select any template text above, copy it (Ctrl+C / Cmd+C), then paste it into the chat input below!")
 
     # Official Streamlit chat input - automatically positioned at bottom
     prompt = st.chat_input("Ask questions about your documents and data...", key="chat_input")

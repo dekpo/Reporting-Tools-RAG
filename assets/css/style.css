@@ -147,8 +147,8 @@ div.discussionDiv {
     flex-direction: column-reverse;
 }
 div[data-testid="stChatMessage"]{
- padding-left: 0;
- padding-right: 0;
+ padding-left: 10px;
+ padding-right: 15px;
 }
 
 div.iframeScript{
