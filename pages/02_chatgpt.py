@@ -525,8 +525,43 @@ else:
             else:
                 st.info("🔍 Debug mode is **OFF**. Clean interface with no technical details shown.")
             
+            # Context Window Management Settings
+            st.divider()
+            st.markdown("**Context Window Management**")
+            
+            # Max context messages setting
+            max_context_messages = st.slider(
+                "Max Context Messages",
+                min_value=10,
+                max_value=50,
+                value=st.session_state.get("max_context_messages", 20),
+                help="Maximum number of messages to keep in full before summarizing older ones"
+            )
+            st.session_state.max_context_messages = max_context_messages
+            
+            # Preserve recent messages setting
+            preserve_recent = st.slider(
+                "Recent Messages to Preserve",
+                min_value=5,
+                max_value=15,
+                value=st.session_state.get("preserve_recent", 10),
+                help="Number of most recent messages to always keep in full context"
+            )
+            st.session_state.preserve_recent = preserve_recent
+            
+            # Tool output truncation setting
+            tool_output_max = st.slider(
+                "Tool Output Max Length",
+                min_value=500,
+                max_value=2000,
+                value=st.session_state.get("tool_output_max", 1000),
+                help="Maximum length for tool outputs before truncation (saves context space)"
+            )
+            st.session_state.tool_output_max = tool_output_max
+            
             # Show current configuration
             st.caption(f"Current settings: Max steps = {max_iterations}, Debug = {'ON' if debug_enabled else 'OFF'}")
+            st.caption(f"Context settings: {max_context_messages} max messages, {preserve_recent} recent preserved, {tool_output_max} tool output limit")
         
         # System Information Section with Expander
         with st.expander("ℹ️ System Information", expanded=False):
@@ -558,7 +593,10 @@ else:
                     # Reset to defaults
                     st.session_state.show_debug = False
                     st.session_state.max_iterations = 10
-                    st.success("Settings reset to defaults!")
+                    st.session_state.max_context_messages = 20
+                    st.session_state.preserve_recent = 10
+                    st.session_state.tool_output_max = 1000
+                    st.success("All settings reset to defaults!")
 
     # Process document and create vector database if not already processed
     if "saved_anonymisation" in st.session_state:
@@ -641,7 +679,19 @@ else:
             num_datasets = len(st.session_state.get('tabular_datasets', {}))
             available_sources.append(f"{num_datasets} tabular dataset(s)")
         
-        st.info(f"📊 Ready to analyze: {', '.join(available_sources)}")
+        # Show data sources and context optimization status
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.info(f"📊 Ready to analyze: {', '.join(available_sources)}")
+        
+        with col2:
+            # Show context optimization status
+            if len(st.session_state.messages) > st.session_state.get("max_context_messages", 20):
+                context_stats = lib.get_context_stats(st.session_state.messages)
+                st.info(f"🧠 Context: {context_stats['estimated_tokens']:,} tokens")
+            elif len(st.session_state.messages) > 10:
+                context_stats = lib.get_context_stats(st.session_state.messages)
+                st.success(f"🧠 Context: {context_stats['estimated_tokens']:,} tokens")
 
     # Welcome message for first-time users (when no chat history exists)
     if not st.session_state.messages:
@@ -913,9 +963,33 @@ Provide clear, actionable recommendations."""
                         agent_executor = lib.create_unified_agent()
                         
                         if agent_executor is not None:
+                            # ===== PHASE 1 CONTEXT OPTIMIZATION =====
+                            # Get context statistics before processing
+                            context_stats = lib.get_context_stats(st.session_state.messages)
+                            
+                            # Show context warning if approaching limits
+                            if context_stats["estimated_tokens"] > 50000:  # Warning at ~50k tokens
+                                st.info("📊 **Context Management**: Large conversation detected. Optimizing context to maintain performance...")
+                            
                             # Execute the query using the unified agent
                             try:
                                 result = agent_executor.invoke({"input": prompt})
+                                
+                                # ===== OPTIMIZE AGENT RESULT FOR CONTEXT =====
+                                # Apply tool output optimization to save context space
+                                # Use user-configurable tool output max length
+                                tool_output_max = st.session_state.get("tool_output_max", 1000)
+                                
+                                # Customize the optimization for this session
+                                if "intermediate_steps" in result:
+                                    optimized_steps = []
+                                    for action, observation in result["intermediate_steps"]:
+                                        truncated_observation = lib.truncate_tool_output(observation, max_length=tool_output_max)
+                                        optimized_steps.append((action, truncated_observation))
+                                    
+                                    result = result.copy()
+                                    result["intermediate_steps"] = optimized_steps
+                                
                                 response = result["output"]
                                 
                                 # Check if the response indicates max iterations was reached
@@ -1048,15 +1122,27 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                         # Fallback to basic approach if tools not available
                         st.warning("Advanced tool-calling is not available. Using basic chat mode.")
                         
-                        # Create basic chat response
-                        messages = [
-                            {"role": "system", "content": "You are a helpful assistant. Answer questions based on your knowledge."}
-                        ]
-                        # Add all previous messages
-                        messages.extend([
+                        # Create basic chat response with context management
+                        system_message = {"role": "system", "content": "You are a helpful assistant. Answer questions based on your knowledge."}
+                        
+                        # ===== APPLY CONTEXT WINDOW MANAGEMENT =====
+                        all_session_messages = [
                             {"role": m["role"], "content": m["content"]} 
                             for m in st.session_state.messages
-                        ])
+                        ]
+                        
+                        # Apply context optimization for long conversations using user settings
+                        max_context_messages = st.session_state.get("max_context_messages", 20)
+                        preserve_recent = st.session_state.get("preserve_recent", 10)
+                        
+                        optimized_messages = lib.manage_context_window(
+                            all_session_messages, 
+                            max_context_messages=max_context_messages, 
+                            preserve_recent=preserve_recent
+                        )
+                        
+                        # Combine system message with optimized messages
+                        messages = [system_message] + optimized_messages
                         
                         # Create streaming response
                         stream = client.chat.completions.create(

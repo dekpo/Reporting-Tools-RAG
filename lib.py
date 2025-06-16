@@ -2065,3 +2065,148 @@ When users ask questions:
     )
     
     return agent_executor
+
+# ===== PHASE 1 CONTEXT OPTIMIZATION FUNCTIONS =====
+
+def truncate_tool_output(output_text, max_length=1000):
+    """
+    Truncate long tool outputs to save context space while preserving key information.
+    
+    Args:
+        output_text: The tool output string to truncate
+        max_length: Maximum allowed length for the output
+    
+    Returns:
+        Truncated output with summary information
+    """
+    if not output_text or len(str(output_text)) <= max_length:
+        return str(output_text)
+    
+    truncated = str(output_text)[:max_length]
+    
+    # Try to cut at a complete sentence or line break
+    last_period = truncated.rfind('.')
+    last_newline = truncated.rfind('\n')
+    
+    if last_period > max_length * 0.8:  # If we can cut at a sentence without losing too much
+        truncated = truncated[:last_period + 1]
+    elif last_newline > max_length * 0.7:  # If we can cut at a line break
+        truncated = truncated[:last_newline]
+    
+    original_length = len(str(output_text))
+    truncated_chars = original_length - len(truncated)
+    
+    summary = f"\n\n[📊 **Tool Output Summary**: Showing {len(truncated):,} of {original_length:,} characters. {truncated_chars:,} characters truncated to save context space.]"
+    
+    return truncated + summary
+
+def manage_context_window(messages, max_context_messages=20, preserve_recent=10):
+    """
+    Manage context window by keeping recent messages and summarizing older ones.
+    
+    Args:
+        messages: List of chat messages
+        max_context_messages: Maximum number of messages to keep in full
+        preserve_recent: Number of recent messages to always preserve
+    
+    Returns:
+        Optimized message list with context management
+    """
+    if len(messages) <= max_context_messages:
+        return messages
+    
+    # Always preserve system message if it exists
+    system_messages = [msg for msg in messages if msg.get("role") == "system"]
+    non_system_messages = [msg for msg in messages if msg.get("role") != "system"]
+    
+    # If we have fewer non-system messages than max, return all
+    if len(non_system_messages) <= max_context_messages:
+        return messages
+    
+    # Keep the most recent messages
+    recent_messages = non_system_messages[-preserve_recent:]
+    
+    # Summarize older messages if there are any
+    older_messages = non_system_messages[:-preserve_recent]
+    
+    if older_messages:
+        # Create a summary of older conversation
+        summary_content = "Previous conversation summary:\n"
+        
+        # Group older messages into user-assistant pairs for summarization
+        for i in range(0, len(older_messages), 2):
+            if i + 1 < len(older_messages):
+                user_msg = older_messages[i]
+                assistant_msg = older_messages[i + 1]
+                
+                if user_msg.get("role") == "user" and assistant_msg.get("role") == "assistant":
+                    # Create a brief summary of this exchange
+                    user_content = user_msg.get("content", "")[:200]  # First 200 chars
+                    assistant_content = assistant_msg.get("content", "")[:300]  # First 300 chars
+                    
+                    summary_content += f"• User asked: {user_content}{'...' if len(user_msg.get('content', '')) > 200 else ''}\n"
+                    summary_content += f"• Assistant replied: {assistant_content}{'...' if len(assistant_msg.get('content', '')) > 300 else ''}\n\n"
+        
+        # Create summary message
+        summary_message = {
+            "role": "system", 
+            "content": f"{summary_content}\n[Context optimized: {len(older_messages)} older messages summarized to save space]"
+        }
+        
+        # Combine: system messages + summary + recent messages
+        optimized_messages = system_messages + [summary_message] + recent_messages
+    else:
+        # No older messages to summarize
+        optimized_messages = system_messages + recent_messages
+    
+    return optimized_messages
+
+def get_context_stats(messages):
+    """
+    Get statistics about the current context usage.
+    
+    Args:
+        messages: List of chat messages
+    
+    Returns:
+        Dictionary with context statistics
+    """
+    total_chars = sum(len(str(msg.get("content", ""))) for msg in messages)
+    
+    # Rough estimation: 1 token ≈ 4 characters for English text
+    estimated_tokens = total_chars // 4
+    
+    return {
+        "total_messages": len(messages),
+        "total_characters": total_chars,
+        "estimated_tokens": estimated_tokens,
+        "user_messages": len([msg for msg in messages if msg.get("role") == "user"]),
+        "assistant_messages": len([msg for msg in messages if msg.get("role") == "assistant"]),
+        "system_messages": len([msg for msg in messages if msg.get("role") == "system"])
+    }
+
+def optimize_agent_result(result):
+    """
+    Optimize agent execution result by truncating long tool outputs.
+    
+    Args:
+        result: Agent execution result with intermediate_steps
+    
+    Returns:
+        Optimized result with truncated tool outputs
+    """
+    if "intermediate_steps" not in result:
+        return result
+    
+    optimized_steps = []
+    
+    for action, observation in result["intermediate_steps"]:
+        # Truncate the observation (tool output) to save context
+        truncated_observation = truncate_tool_output(observation, max_length=800)
+        optimized_steps.append((action, truncated_observation))
+    
+    # Create a new result with optimized steps
+    optimized_result = result.copy()
+    optimized_result["intermediate_steps"] = optimized_steps
+    
+    return optimized_result
