@@ -1,15 +1,3 @@
-# Suppress matplotlib warnings and font cache messages (especially for PyInstaller)
-import os
-import warnings
-
-# Set matplotlib backend before any matplotlib imports
-os.environ['MPLBACKEND'] = 'Agg'
-os.environ['MPLCONFIGDIR'] = '/tmp'  # Use temp directory for config
-
-# Suppress matplotlib font cache warnings
-warnings.filterwarnings('ignore', message='.*font cache.*')
-warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
-
 # Packages
 import streamlit as st
 

@@ -11,26 +11,22 @@ import shutil
 
 # For visualization capabilities
 try:
-    # Suppress matplotlib font cache warnings before importing
+    # Suppress matplotlib font cache messages for PyInstaller exe
     import warnings
-    import os
+    import logging
     
-    # Set matplotlib to use non-interactive backend and suppress warnings
-    os.environ['MPLBACKEND'] = 'Agg'  # Use non-GUI backend
+    # Suppress matplotlib font manager warnings
+    warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib.font_manager')
     
-    # Suppress specific matplotlib warnings
-    warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
-    warnings.filterwarnings('ignore', message='.*font cache.*')
-    
-    # Import matplotlib with font cache warning suppressed
-    import matplotlib
-    matplotlib.use('Agg', force=True)  # Ensure non-interactive backend
-    
-    # Suppress font manager warnings
-    import matplotlib.font_manager
-    matplotlib.font_manager._log.setLevel('WARNING')
+    # Set matplotlib logging level to suppress font cache messages
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
     
     import matplotlib.pyplot as plt
+    import matplotlib
+    
+    # Use Agg backend to avoid GUI dependencies in exe
+    matplotlib.use('Agg')
+    
     import seaborn as sns
     import plotly.express as px
     import plotly.graph_objects as go
