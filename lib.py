@@ -1244,15 +1244,25 @@ def update_document_entities(document_hash, entities):
 # ===== TABULAR DATA HANDLING FUNCTIONS =====
 
 def get_delimiter(file, bytes=4096):
-    """Detect CSV delimiter using csv.Sniffer"""
+    """Detect CSV delimiter using csv.Sniffer with fallback"""
     import csv
     from io import StringIO
     
-    sniffer = csv.Sniffer()
-    stringio = StringIO(file.getvalue().decode("utf-8"))
-    data = stringio.read(bytes)
-    delimiter = sniffer.sniff(data).delimiter
-    return delimiter
+    try:
+        sniffer = csv.Sniffer()
+        # Try UTF-8 first
+        try:
+            stringio = StringIO(file.getvalue().decode("utf-8"))
+        except UnicodeDecodeError:
+            # Fallback to latin-1 if UTF-8 fails
+            stringio = StringIO(file.getvalue().decode("latin-1"))
+        
+        data = stringio.read(bytes)
+        delimiter = sniffer.sniff(data).delimiter
+        return delimiter
+    except Exception:
+        # If all else fails, return comma as default
+        return ','
 
 def save_tabular_metadata(title, df, file_hash):
     """
