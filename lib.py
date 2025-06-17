@@ -1377,6 +1377,16 @@ def delete_tabular_dataset(file_hash):
         if "tabular_datasets" in st.session_state:
             if dataset_title in st.session_state.tabular_datasets:
                 del st.session_state.tabular_datasets[dataset_title]
+            
+            # Clean up empty session state to prevent inconsistencies
+            if not st.session_state.tabular_datasets:
+                # If the dictionary is empty, ensure it's properly initialized
+                st.session_state.tabular_datasets = {}
+        
+        # Clean up related session state variables
+        if "selected_datasets" in st.session_state:
+            if dataset_title in st.session_state.selected_datasets:
+                st.session_state.selected_datasets.remove(dataset_title)
         
         st.success(f"Dataset '{dataset_title}' has been removed.")
         return True
@@ -2270,29 +2280,64 @@ def optimize_agent_result(result):
 def show_data_sources():
     st.markdown("**Manage your document and tabular data sources for AI analysis**")
     
-    # Check available data sources for smart expansion
-    has_documents = "vector_db" in st.session_state and st.session_state.vector_db is not None
-    has_datasets = "tabular_datasets" in st.session_state and st.session_state.tabular_datasets
+    # Check available data sources for smart expansion with protective logic
+    has_documents = bool("vector_db" in st.session_state and st.session_state.vector_db is not None)
+    has_datasets = bool("tabular_datasets" in st.session_state and st.session_state.tabular_datasets)
     
-    # Document Sources Section with Expander
-    with st.expander("📄 Document Sources", expanded=has_documents and not has_datasets):
-        if "vector_db" in st.session_state and st.session_state.vector_db is not None:
-            # Load document metadata
+    # Additional check: Ensure we have actual data from persistent storage if session state is empty
+    if not has_datasets:
+        try:
+            tabular_metadata = get_tabular_metadata()
+            if tabular_metadata:
+                has_datasets = True
+        except Exception:
+            has_datasets = False
+    
+    if not has_documents:
+        try:
             persist_directory = './chroma_db'
             document_metadata = load_document_metadata(persist_directory)
-            
+            if document_metadata:
+                has_documents = True
+        except Exception:
+            has_documents = False
+    
+    # Ensure boolean values are explicitly set to prevent Streamlit expander errors
+    documents_expanded = bool(has_documents and not has_datasets)
+    datasets_expanded = bool(has_datasets and not has_documents)
+
+    # Document Sources Section with Expander
+    with st.expander("📄 Document Sources", expanded=documents_expanded):
+        # Check both session state and persistent storage for robustness
+        session_has_documents = "vector_db" in st.session_state and st.session_state.vector_db is not None
+        
+        # Load document metadata to check persistent storage
+        try:
+            persist_directory = './chroma_db'
+            document_metadata = load_document_metadata(persist_directory)
+        except Exception as e:
+            st.error(f"Error loading document metadata: {e}")
+            document_metadata = {}
+        
+        if session_has_documents or document_metadata:
             if document_metadata:
                 st.markdown("*Select documents to use as sources for your questions*")
                 
                 # Convert metadata to a more usable format for display
                 doc_list = []
                 for doc_hash, doc_data in document_metadata.items():
+                    # Defensive programming: ensure all required fields exist
+                    title = doc_data.get("title", f"Document_{doc_hash[:8]}")
+                    chunks = doc_data.get("chunks", 0)
+                    timestamp = doc_data.get("timestamp", 0)
+                    active = doc_data.get("active", True)
+                    
                     doc_list.append({
                         "hash": doc_hash,
-                        "title": doc_data["title"],
-                        "chunks": doc_data["chunks"],
-                        "timestamp": doc_data.get("timestamp", 0),
-                        "active": doc_data.get("active", True)
+                        "title": title,
+                        "chunks": chunks,
+                        "timestamp": timestamp,
+                        "active": active
                     })
                 
                 # Sort by timestamp (newest first)
@@ -2313,8 +2358,11 @@ def show_data_sources():
                     
                     with col2:
                         from datetime import datetime
-                        timestamp = datetime.fromtimestamp(doc["timestamp"])
-                        st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                        try:
+                            timestamp = datetime.fromtimestamp(doc["timestamp"])
+                            st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                        except (ValueError, OSError):
+                            st.caption("Added: Unknown")
                     
                     with col3:
                         if st.button("Remove", key=f"remove_{doc['hash']}"):
@@ -2379,10 +2427,28 @@ def show_data_sources():
             st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
 
     # Tabular Dataset Sources Section with Expander
-    with st.expander("📊 Tabular Data Sources", expanded=has_datasets and not has_documents):
-        if "tabular_datasets" in st.session_state and st.session_state.tabular_datasets:
-            # Load tabular metadata
+    with st.expander("📊 Tabular Data Sources", expanded=datasets_expanded):
+        # Check both session state and persistent storage for robustness
+        session_has_datasets = "tabular_datasets" in st.session_state and bool(st.session_state.tabular_datasets)
+        
+        # Load tabular metadata to check persistent storage
+        try:
             tabular_metadata = get_tabular_metadata()
+        except Exception as e:
+            st.error(f"Error loading tabular metadata: {e}")
+            tabular_metadata = {}
+        
+        if session_has_datasets or tabular_metadata:
+            # If we have metadata but no session datasets, try to reload
+            if tabular_metadata and not session_has_datasets:
+                try:
+                    persistent_datasets = load_tabular_datasets()
+                    if persistent_datasets:
+                        st.session_state.tabular_datasets = persistent_datasets
+                        session_has_datasets = True
+                        st.info("Reloaded datasets from storage.")
+                except Exception as e:
+                    st.warning(f"Could not reload datasets: {e}")
             
             if tabular_metadata:
                 st.markdown("*Select datasets to use as sources for your questions*")
@@ -2390,13 +2456,20 @@ def show_data_sources():
                 # Convert metadata to a more usable format for display
                 dataset_list = []
                 for file_hash, dataset_data in tabular_metadata.items():
+                    # Defensive programming: ensure all required fields exist
+                    title = dataset_data.get("title", f"Dataset_{file_hash[:8]}")
+                    shape = dataset_data.get("shape", [0, 0])
+                    columns = dataset_data.get("columns", [])
+                    timestamp = dataset_data.get("timestamp", 0)
+                    active = dataset_data.get("active", True)
+                    
                     dataset_list.append({
                         "hash": file_hash,
-                        "title": dataset_data["title"],
-                        "shape": dataset_data["shape"],
-                        "columns": dataset_data["columns"],
-                        "timestamp": dataset_data.get("timestamp", 0),
-                        "active": dataset_data.get("active", True)
+                        "title": title,
+                        "shape": shape,
+                        "columns": columns,
+                        "timestamp": timestamp,
+                        "active": active
                     })
                 
                 # Sort by timestamp (newest first)
@@ -2417,8 +2490,11 @@ def show_data_sources():
                     
                     with col2:
                         from datetime import datetime
-                        timestamp = datetime.fromtimestamp(dataset["timestamp"])
-                        st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                        try:
+                            timestamp = datetime.fromtimestamp(dataset["timestamp"])
+                            st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                        except (ValueError, OSError):
+                            st.caption("Added: Unknown")
                     
                     with col3:
                         if st.button("Remove", key=f"remove_dataset_{dataset['hash']}"):
@@ -2474,3 +2550,4 @@ def show_data_sources():
         else:
             st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to add datasets.")
             st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
+

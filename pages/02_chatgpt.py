@@ -249,9 +249,25 @@ else:
             
             # Load existing tabular datasets
             try:
-                tabular_datasets = lib.load_tabular_datasets()
-                if tabular_datasets:
-                    st.session_state.tabular_datasets = tabular_datasets
+                persistent_datasets = lib.load_tabular_datasets()
+                if persistent_datasets:
+                    # Merge with existing session datasets instead of overwriting
+                    if "tabular_datasets" not in st.session_state:
+                        st.session_state.tabular_datasets = {}
+                    
+                    # Add debug info if debug mode is enabled
+                    if st.session_state.get("show_debug", False):
+                        st.write(f"🔧 DEBUG: Loading {len(persistent_datasets)} persistent datasets")
+                        st.write(f"🔧 DEBUG: Current session has {len(st.session_state.tabular_datasets)} datasets")
+                    
+                    # Add persistent datasets, but avoid duplicates
+                    for dataset_name, df in persistent_datasets.items():
+                        if dataset_name not in st.session_state.tabular_datasets:
+                            st.session_state.tabular_datasets[dataset_name] = df
+                            if st.session_state.get("show_debug", False):
+                                st.write(f"🔧 DEBUG: Added persistent dataset: {dataset_name}")
+                        elif st.session_state.get("show_debug", False):
+                            st.write(f"🔧 DEBUG: Skipped duplicate dataset: {dataset_name}")
             except Exception as e:
                 st.error(f"Error loading tabular datasets: {e}")
             
@@ -420,6 +436,12 @@ else:
                         st.success(f"Document '{document_title}' added successfully to the database!")
                         # Mark as processed
                         st.session_state.processed_anonymizations.add(anon_key)
+                        
+                        # Update selected_doc_sources to reflect the new document
+                        persist_directory = './chroma_db'
+                        document_metadata = lib.load_document_metadata(persist_directory)
+                        if document_metadata:
+                            st.session_state.selected_doc_sources = list(document_metadata.keys())
                     else:
                         st.error(f"Failed to add document '{document_title}' to the database.")
                 
@@ -451,6 +473,12 @@ else:
                             st.success(f"Document processed successfully! You can now ask questions about '{document_title}'")
                             # Mark as processed
                             st.session_state.processed_anonymizations.add(anon_key)
+                            
+                            # Update selected_doc_sources to reflect the new document
+                            persist_directory = './chroma_db'
+                            document_metadata = lib.load_document_metadata(persist_directory)
+                            if document_metadata:
+                                st.session_state.selected_doc_sources = list(document_metadata.keys())
                         else:
                             st.error("Failed to process document with RAG. Falling back to traditional approach.")
                             # Set vector_db to None to indicate RAG is not available
@@ -468,9 +496,39 @@ else:
         available_sources = []
         if has_documents:
             num_docs = len(st.session_state.get('selected_doc_sources', []))
+            
+            # Fallback: If selected_doc_sources is empty but we have documents, 
+            # try to get count from the actual document metadata
+            if num_docs == 0 and "vector_db" in st.session_state and st.session_state.vector_db is not None:
+                persist_directory = './chroma_db'
+                document_metadata = lib.load_document_metadata(persist_directory)
+                if document_metadata:
+                    num_docs = len(document_metadata)
+                    # Also update selected_doc_sources for consistency
+                    st.session_state.selected_doc_sources = list(document_metadata.keys())
+                elif "saved_anonymisation" in st.session_state:
+                    # If we have a current document but no persistent storage yet, count it as 1
+                    num_docs = 1
+            
             available_sources.append(f"{num_docs} text document(s)")
         if has_datasets:
             num_datasets = len(st.session_state.get('tabular_datasets', {}))
+            
+            # Fallback: If tabular_datasets is empty but we should have datasets,
+            # try to load from persistent storage
+            if num_datasets == 0:
+                try:
+                    persistent_datasets = lib.load_tabular_datasets()
+                    if persistent_datasets:
+                        num_datasets = len(persistent_datasets)
+                        # Also update session state for consistency
+                        if "tabular_datasets" not in st.session_state:
+                            st.session_state.tabular_datasets = {}
+                        st.session_state.tabular_datasets.update(persistent_datasets)
+                except Exception:
+                    # If loading fails, we'll just use the current count
+                    pass
+            
             available_sources.append(f"{num_datasets} tabular dataset(s)")
         
         # Show data sources and context optimization status

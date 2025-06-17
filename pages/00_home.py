@@ -177,7 +177,7 @@ def process_excel_file(file_content, file_hash):
 
 st.markdown("<p>Welcome to this set of tools! Upload your document, anonymize content, ask ChatGPT for insights, and revert anonymization when needed.</p>",unsafe_allow_html=True)
 
-st.header("Upload New Document")
+st.header("Upload New Source")
 
 st.markdown("<p>Upload your file to begin processing. Choose from meeting transcripts, text documents, or data files.</p>", unsafe_allow_html=True)
 
@@ -462,8 +462,13 @@ if st.session_state.file_category == "data":
                 # Save tabular metadata for persistence
                 lib.save_tabular_metadata(title_input, df, file_hash)
                 
-                # Update session state with proper title
-                del st.session_state.tabular_datasets[temp_key]
+                # Clean up temporary dataset and replace with properly titled one
+                # Remove all temporary datasets to avoid duplication
+                temp_keys = [key for key in st.session_state.tabular_datasets.keys() if key.startswith("temp_")]
+                for temp_key in temp_keys:
+                    del st.session_state.tabular_datasets[temp_key]
+                
+                # Add the properly titled dataset
                 st.session_state.tabular_datasets[title_input] = df
                 
                 # Skip anonymization, go directly to ChatGPT
