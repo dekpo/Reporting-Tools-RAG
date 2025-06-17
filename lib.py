@@ -11,6 +11,25 @@ import shutil
 
 # For visualization capabilities
 try:
+    # Suppress matplotlib font cache warnings before importing
+    import warnings
+    import os
+    
+    # Set matplotlib to use non-interactive backend and suppress warnings
+    os.environ['MPLBACKEND'] = 'Agg'  # Use non-GUI backend
+    
+    # Suppress specific matplotlib warnings
+    warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
+    warnings.filterwarnings('ignore', message='.*font cache.*')
+    
+    # Import matplotlib with font cache warning suppressed
+    import matplotlib
+    matplotlib.use('Agg', force=True)  # Ensure non-interactive backend
+    
+    # Suppress font manager warnings
+    import matplotlib.font_manager
+    matplotlib.font_manager._log.setLevel('WARNING')
+    
     import matplotlib.pyplot as plt
     import seaborn as sns
     import plotly.express as px
