@@ -156,35 +156,51 @@ def extract_pdf_content(file_content, file_hash):
 def process_csv_file(file_content, file_hash):
     """Process CSV file and return DataFrame with caching"""
     try:
-        # Try multiple approaches for robust CSV parsing
-        
-        # First, try to detect delimiter
-        try:
-            separator = lib.get_delimiter(io.BytesIO(file_content))
-        except:
-            separator = ','  # Fallback to comma
-        
-        # Try parsing with detected/default separator
-        try:
-            df = pd.read_csv(io.BytesIO(file_content), sep=separator, engine='python')
-        except:
-            # If that fails, try with more robust settings
-            df = pd.read_csv(
-                io.BytesIO(file_content), 
-                sep=separator, 
-                engine='python',
-                encoding='utf-8',
-                skipinitialspace=True,  # Handle spaces after delimiter
-                thousands=',',          # Handle comma as thousands separator
-                on_bad_lines='skip'     # Skip problematic lines
-            )
+        # ORIGINAL APPROACH: Use delimiter detection (works for most CSV files)
+        separator = lib.get_delimiter(io.BytesIO(file_content))
+        df = pd.read_csv(io.BytesIO(file_content), sep=separator, engine='python')
         
         # Clean column names (strip whitespace)
         df.columns = df.columns.str.strip()
         
         return df, True
     except Exception as e:
-        return None, False
+        # FALLBACK 1: Force comma separator for problematic files
+        try:
+            df = pd.read_csv(
+                io.BytesIO(file_content), 
+                sep=',',
+                encoding='utf-8'
+            )
+            df.columns = df.columns.str.strip()
+            return df, True
+        except Exception as e2:
+            # FALLBACK 2: Enhanced parsing for complex CSV files
+            try:
+                df = pd.read_csv(
+                    io.BytesIO(file_content), 
+                    sep=',',                    
+                    engine='python',            
+                    encoding='utf-8',           
+                    skipinitialspace=True,      
+                    quotechar='"',              
+                    doublequote=True,           
+                    on_bad_lines='skip'         
+                )
+                df.columns = df.columns.str.strip()
+                return df, True
+            except Exception as e3:
+                # FALLBACK 3: Different encoding
+                try:
+                    df = pd.read_csv(
+                        io.BytesIO(file_content), 
+                        sep=',',
+                        encoding='latin-1'
+                    )
+                    df.columns = df.columns.str.strip()
+                    return df, True
+                except:
+                    return None, False
 
 # Helper function to process Excel files
 @st.cache_data  
