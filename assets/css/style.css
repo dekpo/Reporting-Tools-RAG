@@ -1,0 +1,185 @@
+:root {
+    --color-white: #FFFFFF;
+    --color-light: #eeeeee;
+    /** CSS PRIMARY COLORS */
+    --color-primary-100: #1894c6;
+    --color-primary-200: #479fcc;
+    --color-primary-300: #64abd3;
+    --color-primary-400: #7db7d9;
+    --color-primary-500: #94c2df;
+    --color-primary-600: #aacee6;
+    /** CSS SURFACE COLORS */
+    --color-surface-100: #121212;
+    --color-surface-200: #282828;
+    --color-surface-300: #3f3f3f;
+    --color-surface-400: #575757;
+    --color-surface-500: #717171;
+    --color-surface-600: #8b8b8b;
+    /** CSS MIXED SURFACE COLORS */
+    --color-surface-mixed-100: #181e21;
+    --color-surface-mixed-200: #2d3336;
+    --color-surface-mixed-300: #44494c;
+    --color-surface-mixed-400: #5c6063;
+    --color-surface-mixed-500: #75797b;
+    --color-surface-mixed-600: #8f9294;
+
+    --default-radius: 0.5em;
+}
+
+html{
+    scroll-behavior: smooth;
+}
+
+.stApp [data-testid="stToolbar"] {
+    display: none;
+}
+
+div[data-testid="stDecoration"] {
+    background-image: linear-gradient(90deg, var(--color-primary-100), var(--color-white));
+}
+
+div[data-testid="stVerticalBlock"] div:has(div.fixed-header) {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: var(--color-white);
+    border-radius: var(--default-radius);
+    padding: 1em;
+}
+
+div[data-testid="stMarkdownContainer"] h2,
+h1 {
+    color: var(--color-primary-100);
+}
+
+div[data-testid="stHeadingWithActionElements"] h2 {
+    color: var(--color-surface-100)
+}
+
+hr[data-testid="stHeadingDivider"] {
+    border-top: 1px solid var(--color-primary-100);
+    border-right: none;
+    border-bottom: none;
+    border-left: none;
+    height: 1px !important;
+    border-radius: 0%;
+    padding: 0;
+}
+
+div[data-testid="stAppViewBlockContainer"] {
+    padding: 1em;
+}
+
+h3 {
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+button[data-testid="baseButton-primary"] {
+    border-radius: var(--default-radius);
+}
+
+a[data-testid="stPageLink-NavLink"] {
+    border-radius: var(--default-radius);
+    padding: 0.25rem;
+}
+
+/* div[data-testid="column"] {
+    width: fit-content !important;
+    flex: unset;
+}
+
+div[data-testid="column"] * {
+    width: fit-content !important;
+} */
+
+.extracted-content{
+    display: none;
+}
+
+div[data-testid="stVerticalBlock"] div:has(div.extracted-content) {
+    background-color: var(--color-light);
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"]{
+    background-color: none;
+}
+
+span.entity {
+    font-weight: bold;
+    padding: 0.5em;
+    border-radius: var(--default-radius);
+}
+
+span.entity.gpe {
+    background-color: #83F52C;
+}
+
+span.entity.org {
+    background-color: #F3F315;
+}
+
+span.entity.person {
+    background-color: var(--color-primary-500);
+}
+
+div[data-testid="stVerticalBlock"] div:has(div.fixed-header) {
+    position: sticky;
+    left: 0;
+    top: 2em;
+    width: 100%;
+    z-index: 999;
+    background-color: var(--color-light);
+}
+
+div.discussionContainer {
+    height: 450px;
+    width: 100%;
+}
+
+div.discussionDiv {
+    overflow: scroll;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column-reverse;
+}
+div[data-testid="stChatMessage"]{
+ padding-left: 10px;
+ padding-right: 15px;
+}
+
+div.iframeScript{
+    height: 0;
+    margin: 0;
+    padding: 0;
+}
+div[data-testid="stMarkdownContainer"] p a {
+    background-color: var(--color-primary-100);
+    justify-content: center;
+    font-weight: 400;
+    color: var(--color-white);
+    min-height: 60px;
+    border-radius: var(--default-radius);
+    padding: 0.50rem 0.75rem;
+    line-height:1.6;
+    border: 1px solid var(--color-primary-100);
+    text-decoration: none;
+}
+
+div[data-testid="stMarkdownContainer"] p a.link-primary{
+    background-color: transparent;
+    border: none;
+    min-height: 1em;
+    color: var(--color-primary-100);
+    text-decoration: none;
+}
+
+/* Bottom action buttons container */
+div[data-testid="stVerticalBlock"].st-key-bottom_buttons_container {
+    z-index: 100;
+    position: fixed;
+    bottom: 0px;
+}
