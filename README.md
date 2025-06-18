@@ -5,17 +5,19 @@ A Python app to convert transcripts, anonymize content, ask ChatGPT for processi
 This application provides a streamlined workflow for processing meeting transcripts and analyzing data:
 1. **Upload & Extract** - Upload and convert files (.docx, .vtt, .pdf, .csv, .xlsx) into text content or tabular data
 2. **Anonymize** - Replace sensitive information with generic placeholders
-3. **ChatGPT** - Use AI to analyze and summarize content, perform data analysis, and generate visualizations
+3. **ChatGPT Analysis** - Use AI with advanced agent tools to analyze content, perform data analysis, and generate visualizations
 4. **Revert** - Convert anonymized content back to its original form
 
 ## Features
 - **File Support**: Support for Teams/Zoom .vtt files, Teams .docx files, regular .docx documents, PDF files, CSV files, and Excel files
+- **Model Selection**: Choose from GPT-4o, GPT-4 Turbo, GPT-4, or GPT-3.5 Turbo models
 - **Anonymization**: Automatically detect and replace sensitive entities (names, organizations, etc.)
+- **Advanced AI Agent**: Multi-tool AI system with document search, data analysis, and visualization capabilities
 - **RAG Integration**: Uses Retrieval-Augmented Generation for more accurate AI responses
 - **Vector Database**: Store and retrieve documents using ChromaDB for semantic search
 - **Data Analysis**: Advanced tabular data analysis using pandas and natural language queries
 - **Chart Generation**: Create interactive visualizations from your data with simple prompts
-- **Multi-modal Agent**: Unified AI agent that can work with both text documents and tabular data
+- **Persistent Storage**: Cross-session data retention for documents and datasets
 - **Multi-page Interface**: Intuitive Streamlit UI with step-by-step workflow
 
 ## Chart Generation Capabilities
@@ -84,15 +86,16 @@ This application provides a streamlined workflow for processing meeting transcri
 
 1. **Upload Your Data**: 
    - Upload CSV or Excel files through the home page
-   - Your data will be automatically processed and made available for analysis
+   - Your data will be automatically processed and stored persistently
 
 2. **Navigate to ChatGPT Tool**: 
    - Go to the ChatGPT Tool page
+   - Select your OpenAI model (GPT-4o recommended for best results)
    - Ensure your datasets are selected in the "Tabular Data Sources" section
 
 3. **Request Charts with Natural Language**:
    - Use any of the example prompts above
-   - The AI will automatically detect appropriate columns and create visualizations
+   - The AI agent will automatically detect appropriate columns and create visualizations
    - Charts will appear directly in the chat interface
 
 4. **Customize Your Charts**:
@@ -127,27 +130,26 @@ $ streamlit run app.py
 
 ## Requirements
 - Python 3.8+
-- OpenAI API key (for ChatGPT and embedding functionality)
+- OpenAI API key (for ChatGPT, embeddings, and tool-calling functionality)
 - Spacy model (en_core_web_md)
 
 ## Workflow
 1. **Upload & Extract**: Upload files (.vtt, .docx, .pdf, .csv, .xlsx) or paste text directly
 2. **Anonymize Content**: Automatically detect and replace sensitive entities (text documents only)
-3. **ChatGPT Tool**: Ask questions, perform analysis, and generate charts using the unified AI agent
+3. **ChatGPT Analysis**: Select AI model, ask questions, perform analysis, and generate charts using the multi-tool agent
 4. **Reverse Anonymization**: Convert anonymized responses back to original form (text documents only)
 
 ## Dependencies
 - streamlit - Web application framework
 - openai - OpenAI API client
-- langchain - Framework for LLM applications
+- langchain, langchain-openai, langchain-experimental - Framework for LLM applications and tool-calling
 - chromadb - Vector database for document storage and retrieval
 - spacy - NLP library for entity recognition
 - docx2txt, python-docx - For processing Word documents
 - webvtt-py - For processing VTT subtitle files
-- pandas - For data manipulation and analysis
+- pandas, openpyxl - For data manipulation and analysis
 - PyMuPDF, PyPDF2 - For PDF processing
 - matplotlib, seaborn, plotly - For chart generation and data visualization
-- openpyxl - For Excel file processing
 
 ## Data Storage
 - Session state for temporary storage during workflow
@@ -156,14 +158,16 @@ $ streamlit run app.py
 - Logging functionality for tracking application usage
 
 ## Advanced Features
+- **Multi-Tool AI Agent** with document search, data analysis, and visualization tools
 - **RAG (Retrieval-Augmented Generation)** for more accurate AI responses
-- **Multi-modal AI Agent** that can work with both text and tabular data simultaneously
 - **Interactive Visualizations** with Plotly for dynamic chart exploration
 - **Document chunking** for efficient processing of large documents
 - **Entity recognition and anonymization** with customizable categories
 - **Vector search** for finding relevant content across documents
 - **Cross-reference analysis** between documents and datasets
 - **Natural language data analysis** using pandas operations
+- **Agent debugging mode** for understanding AI decision-making
+- **Context optimization** for efficient conversation management
 
 # DTN Reporting Tools - Privacy Features
 

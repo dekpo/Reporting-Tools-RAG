@@ -29,7 +29,7 @@ def show_quick_start():
         - Go to the **Home** page
         - Upload your files (.docx, .vtt, .pdf, .csv, .xlsx)
         - Or paste text directly into the text area
-        - The content will be automatically processed
+        - The content will be automatically processed and stored
         
         #### **Step 2: Anonymize (Optional)** 🔒
         - For sensitive documents, visit the **Anonymize** page
@@ -38,9 +38,10 @@ def show_quick_start():
         
         #### **Step 3: AI Analysis** 🤖
         - Head to the **ChatGPT Tool** page
-        - Select your documents/datasets in the sidebar
-        - Ask questions or request analysis using natural language
-        - Generate reports, summaries, charts, and insights
+        - **Select your AI model** (GPT-4o recommended for best results)
+        - Choose your documents/datasets from the sidebar sources
+        - Ask questions, request analysis, or generate charts using natural language
+        - The AI agent uses advanced tools for document search, data analysis, and visualization
         
         #### **Step 4: Revert (If Needed)** ↩️
         - If you anonymized content, use the **Revert** page
@@ -54,9 +55,9 @@ def show_quick_start():
         
         ✅ **Start Simple:** Upload one document first to get familiar
         
-        ✅ **Use Templates:** Check the Prompt Engineering tab for ready-made prompts
+        ✅ **Choose Right Model:** GPT-4o for complex analysis, GPT-3.5 for quick tasks
         
-        ✅ **Combine Data:** Mix text documents with spreadsheets for richer analysis
+        ✅ **Use Agent Tools:** Ask for charts, data summaries, and cross-references
         
         ✅ **Be Specific:** The more detail in your questions, the better the results
         """)
@@ -65,9 +66,10 @@ def show_quick_start():
         **🎯 Most Popular Use Cases:**
         
         📊 Meeting report generation
-        📈 Data visualization
+        📈 Data visualization and analysis
         🔍 Document summarization
         📋 Action item extraction
+        🔗 Cross-document insights
         """)
 
 def show_prompt_engineering():
@@ -510,7 +512,7 @@ def show_features_guide():
     
     feature_sections = st.radio(
         "Select feature to learn about:",
-        ["📁 File Processing", "🔒 Anonymization", "🤖 AI Analysis", "📊 Data Visualization", "🔄 RAG System"]
+        ["📁 File Processing", "🔒 Anonymization", "🤖 AI Analysis", "📊 Data Visualization", "🔄 RAG System", "⚙️ Agent Tools"]
     )
     
     if feature_sections == "📁 File Processing":
@@ -523,6 +525,8 @@ def show_features_guide():
         show_visualization_guide()
     elif feature_sections == "🔄 RAG System":
         show_rag_guide()
+    elif feature_sections == "⚙️ Agent Tools":
+        show_agent_tools_guide()
 
 def show_file_processing_guide():
     st.subheader("📁 File Processing Capabilities")
@@ -598,7 +602,15 @@ def show_ai_analysis_guide():
     st.subheader("🤖 AI Analysis Capabilities")
     
     st.markdown("""
-    ### What the AI Can Do
+    ### Model Selection
+    
+    Choose the right AI model for your needs:
+    - **GPT-4o**: Latest model, best for complex analysis and visualizations
+    - **GPT-4 Turbo**: Powerful model with strong reasoning capabilities  
+    - **GPT-4**: Original model with high accuracy
+    - **GPT-3.5 Turbo**: Fast and cost-effective for basic tasks
+    
+    ### What the AI Agent Can Do
     
     The ChatGPT integration provides powerful analysis capabilities:
     """)
@@ -625,12 +637,12 @@ def show_ai_analysis_guide():
             "Multi-chart dashboards",
             "Data storytelling"
         ],
-        "🔍 Advanced Features": [
-            "Cross-document analysis",
+        "🔍 Advanced Agent Tools": [
+            "Cross-document search",
             "Multi-source insights",
-            "Fact verification",
-            "Recommendation generation",
-            "Scenario planning"
+            "Tool-based analysis",
+            "Debug mode for transparency",
+            "Context optimization"
         ]
     }
     
@@ -714,6 +726,48 @@ def show_rag_guide():
     **💡 Pro Tip:** Upload related documents together for better cross-referencing and more comprehensive analysis.
     """)
 
+def show_agent_tools_guide():
+    st.subheader("⚙️ Agent Tools & Settings")
+    
+    st.markdown("""
+    ### How the Agent Works
+    
+    The AI uses specialized tools to analyze your content:
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        **🛠️ Available Tools:**
+        • Document search and retrieval
+        • Tabular data analysis
+        • Chart and visualization creation
+        • Cross-reference analysis
+        • Data summaries and statistics
+        """)
+    
+    with col2:
+        st.markdown("""
+        **⚙️ Agent Settings:**
+        • Max tool calls (limit complexity)
+        • Debug mode (see tool usage)
+        • Context optimization
+        • Tool output limits
+        """)
+    
+    st.info("""
+    **💡 Using Debug Mode:**
+    
+    Enable debug mode in ChatGPT settings to see:
+    ✅ Which tools the agent uses
+    ✅ How it processes your request  
+    ✅ Step-by-step decision making
+    ✅ Tool inputs and outputs
+    
+    This helps you understand and optimize your prompts!
+    """)
+
 def show_troubleshooting():
     st.header("🔧 Troubleshooting")
     
@@ -731,10 +785,20 @@ def show_troubleshooting():
             "symptoms": ["No response from ChatGPT", "Error messages", "Slow responses"],
             "solutions": [
                 "Check your internet connection",
-                "Verify OpenAI API key is configured",
-                "Try a simpler question first",
-                "Check if documents are properly loaded",
+                "Verify OpenAI API key is configured and valid",
+                "Try selecting a different model (GPT-3.5 for testing)",
+                "Check if documents/datasets are properly loaded",
                 "Refresh the page and try again"
+            ]
+        },
+        "⚙️ Agent Tool Issues": {
+            "symptoms": ["Agent stops working", "Tool errors", "Incomplete responses"],
+            "solutions": [
+                "Check max tool calls setting (increase if needed)",
+                "Enable debug mode to see tool execution",
+                "Simplify your request for better tool selection",
+                "Verify data sources are selected",
+                "Try asking one thing at a time"
             ]
         },
         "📊 Charts Not Generating": {
@@ -769,7 +833,12 @@ def show_troubleshooting():
                 st.markdown(f"✅ {solution}")
     
     st.warning("""
-    **💡 Still having issues?** Contact the development team using the contact information at the bottom of this page.
+    **💡 Still having issues?** 
+    
+    1. Try enabling debug mode to see agent tool execution
+    2. Check the model selection (GPT-4o for complex tasks)
+    3. Verify your data sources are properly loaded
+    4. Contact the development team using the information below
     """)
 
 # ===== MAIN CONTENT - Tabs and Contact Section =====
