@@ -195,7 +195,7 @@ def sidebar():
     
     # Show backup section if we have any persistent sources
     if document_metadata or tabular_metadata:
-        st.sidebar.header(":floppy_disk: Your Backup",divider=True)
+        st.sidebar.header(":open_file_folder: Your Source(s)",divider=True)
         
         # Document Sources
         if document_metadata:
