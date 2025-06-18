@@ -240,6 +240,10 @@ def sidebar():
         # Manage Sources button
         if st.sidebar.button("🔧 Manage Sources", key="manage_sources_sidebar", use_container_width=True, help="Open data sources management dialog"):
             st.session_state["show_sources_dialog"] = True
+        
+        # Add New Source button
+        if st.sidebar.button("📁 Add New Source", key="add_new_source_sidebar", use_container_width=True, help="Upload new documents or datasets"):
+            st.switch_page("pages/00_home.py")
     
     # Check if dialog should be shown
     if st.session_state.get("show_sources_dialog", False):
@@ -2575,4 +2579,12 @@ def show_data_sources():
         else:
             st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to add datasets.")
             st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
+    
+    # Add New Source Section
+    st.divider()
+    st.markdown("### 📁 Add New Sources")
+    st.markdown("*Upload new documents or datasets to expand your analysis capabilities*")
+    
+    if st.button("📁 Add New Source", use_container_width=True):
+        st.switch_page("pages/00_home.py")
 
