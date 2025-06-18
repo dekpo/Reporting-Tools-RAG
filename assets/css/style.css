@@ -182,4 +182,43 @@ div[data-testid="stVerticalBlock"].st-key-bottom_buttons_container {
     z-index: 100;
     position: fixed;
     bottom: 0px;
+    left: 21rem; /* Streamlit sidebar width */
+    right: 0;
+    width: calc(100vw - 21rem - 2rem); /* Full width minus sidebar minus padding */
+    padding: 0.5rem;
+    background-color: var(--color-white);
+}
+
+/* Responsive behavior for when sidebar is collapsed */
+@media (max-width: 768px) {
+    div[data-testid="stVerticalBlock"].st-key-bottom_buttons_container {
+        left: 0;
+        width: calc(100vw - 2rem);
+    }
+}
+
+/* Ensure buttons within the container are properly sized */
+div[data-testid="stVerticalBlock"].st-key-bottom_buttons_container div[data-testid="column"] {
+    width: 33.333% !important;
+    flex: 1 1 33.333% !important;
+    max-width: 33.333% !important;
+}
+
+div[data-testid="stVerticalBlock"].st-key-bottom_buttons_container button {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Add minimal spacing above fixed buttons to prevent overlap with chat input */
+div[data-testid="stChatInput"] {
+    margin-bottom: 30px !important;
+}
+
+/* Ensure proper spacing for the main content area when fixed buttons are present */
+.main .block-container {
+    padding-bottom: 70px !important;
+}
+
+div[data-testid="stBottom"] {
+    border-top: 1px solid var(--color-light);
 }
