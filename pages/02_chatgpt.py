@@ -626,7 +626,7 @@ else:
                 st.markdown(message_content)
 
     # Prompt Assistant Dialog Function
-    @st.dialog("💡 Prompt Assistant & Templates", width="large")
+    @st.dialog("💡 Prompt Ideas & Templates", width="large")
     def show_prompt_assistant():
         st.markdown("**Quick access to proven prompt templates for better AI results**")
         
@@ -634,8 +634,31 @@ else:
         has_documents = ("vector_db" in st.session_state and st.session_state.vector_db is not None) or ("saved_anonymisation" in st.session_state)
         has_datasets = "tabular_datasets" in st.session_state and st.session_state.tabular_datasets
         
+        # Generate smart templates based on content analysis (zero tokens)
+        smart_templates = {}
+        if has_documents or has_datasets:
+            document_insights = None
+            dataset_insights = {}
+            
+            # Analyze documents locally (zero tokens)
+            if "saved_anonymisation" in st.session_state:
+                document_content = st.session_state["saved_anonymisation"].get("Data", "")
+                document_entities = st.session_state["saved_anonymisation"].get("Entities", {})
+                if document_content:
+                    document_insights = lib.analyze_document_locally(document_content, document_entities)
+            
+            # Analyze datasets locally (zero tokens)
+            if has_datasets:
+                for dataset_name, df in st.session_state.tabular_datasets.items():
+                    dataset_insights[dataset_name] = lib.analyze_dataset_locally(df, dataset_name)
+            
+            # Generate smart templates
+            smart_templates = lib.generate_smart_templates_locally(document_insights, dataset_insights)
+        
         # Smart suggestions info
-        if has_documents and has_datasets:
+        if smart_templates:
+            st.success(f"✨ Found **{len(smart_templates)}** personalized suggestions based on your content!")
+        elif has_documents and has_datasets:
             st.info("📄📊 Both document and dataset sources are loaded - use any template below!")
         elif has_documents:
             st.info("📄 Document sources loaded - text analysis templates are most relevant")
@@ -644,8 +667,19 @@ else:
         else:
             st.info("💡 Upload documents or datasets on the Home page to get personalized suggestions")
         
+        # Smart Suggestions Section (if available)
+        if smart_templates:
+            with st.expander("✨ Personalized Suggestions", expanded=False):
+                st.markdown("*AI-generated templates based on your actual content*")
+                
+                for title, template in smart_templates.items():
+                    st.markdown(f"**{title}**")
+                    with st.container(border=True):
+                        st.text_area("Template content:", value=template, height=120, key=f"smart_template_{title}", label_visibility="collapsed")
+                st.markdown("---")
+        
         # Text Analysis Templates Section with Expander
-        with st.expander("📊 Text Analysis Templates", expanded=has_documents and not has_datasets):
+        with st.expander("📊 Text Analysis Templates", expanded=False):
             st.markdown("*Perfect for analyzing documents, transcripts, and text content*")
             
             text_templates = {
@@ -694,7 +728,7 @@ Present findings in clear, structured format."""
                 st.markdown("---")
         
         # Data Analysis Templates Section with Expander
-        with st.expander("📈 Data Analysis Templates", expanded=has_datasets and not has_documents):
+        with st.expander("📈 Data Analysis Templates", expanded=False):
             st.markdown("*Perfect for analyzing CSV files, Excel data, and tabular information*")
             
             data_templates = {
@@ -745,7 +779,7 @@ Provide clear, actionable recommendations."""
                 st.markdown("---")
         
         # Quick Starters Section with Expander
-        with st.expander("🚀 Quick Starters", expanded=not has_documents and not has_datasets):
+        with st.expander("🚀 Quick Starters", expanded=False):
             st.markdown("*Simple, ready-to-use prompts for quick analysis*")
             
             quick_templates = {
@@ -781,7 +815,7 @@ Provide clear, actionable recommendations."""
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("💡 Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Open prompt assistant with ready-made templates"):
+            if st.button("💡 Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Get AI-powered prompt suggestions based on your content"):
                 show_prompt_assistant()
         
         with col2:

@@ -8,6 +8,7 @@ import os
 import json
 import hashlib
 import shutil
+import re
 
 # For visualization capabilities
 try:
@@ -18,8 +19,13 @@ try:
     # Suppress matplotlib font manager warnings
     warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib.font_manager')
     
+    # Suppress matplotlib FigureCanvasAgg warnings  
+    warnings.filterwarnings('ignore', category=UserWarning, message='.*FigureCanvasAgg.*')
+    warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib.backends.*')
+    
     # Set matplotlib logging level to suppress font cache messages
     logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+    logging.getLogger('matplotlib.backends').setLevel(logging.ERROR)
     
     import matplotlib.pyplot as plt
     import matplotlib
@@ -2309,6 +2315,76 @@ def optimize_agent_result(result):
 def show_data_sources():
     st.markdown("**Manage your document and tabular data sources for AI analysis**")
     
+    # Content insights toggle
+    show_insights = st.checkbox("🔍 Show Content Insights", help="Display AI-powered analysis of your content (no tokens consumed)")
+    
+    # Perform content analysis if requested
+    if show_insights:
+        st.divider()
+        st.subheader("📋 Content Analysis Summary")
+        
+        # Document insights
+        if "saved_anonymisation" in st.session_state:
+            document_content = st.session_state["saved_anonymisation"].get("Data", "")
+            document_entities = st.session_state["saved_anonymisation"].get("Entities", {})
+            if document_content:
+                with st.expander("📄 Document Insights", expanded=True):
+                    insights = analyze_document_locally(document_content, document_entities)
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Content Type", insights.get('meeting_type', 'document').replace('_', ' ').title())
+                    with col2:
+                        st.metric("Word Count", f"{insights.get('word_count', 0):,}")
+                    with col3:
+                        st.metric("Formality Score", f"{insights.get('formality_score', 0):.1%}")
+                    with col4:
+                        action_status = "✅ Yes" if insights.get('has_action_items') else "❌ No"
+                        st.metric("Has Actions", action_status)
+                    
+                    # Entity breakdown
+                    entity_types = insights.get('entity_types', [])
+                    if entity_types:
+                        st.write("**Detected Entities:**")
+                        entity_counts = {}
+                        for entity_type in entity_types:
+                            entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+                        
+                        for entity_type, count in entity_counts.items():
+                            st.write(f"• {entity_type}: {count} instances")
+        
+        # Dataset insights
+        if "tabular_datasets" in st.session_state and st.session_state.tabular_datasets:
+            with st.expander("📊 Dataset Insights", expanded=True):
+                for dataset_name, df in st.session_state.tabular_datasets.items():
+                    insights = analyze_dataset_locally(df, dataset_name)
+                    
+                    st.write(f"**{dataset_name}**")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Rows", f"{insights.get('row_count', 0):,}")
+                    with col2:
+                        st.metric("Columns", insights.get('column_count', 0))
+                    with col3:
+                        st.metric("Key Metrics", len(insights.get('key_metrics', [])))
+                    with col4:
+                        data_quality = f"{insights.get('data_density', 0):.1f}%"
+                        st.metric("Data Quality", data_quality)
+                    
+                    # Show suggested charts
+                    suggested_charts = insights.get('suggested_charts', [])
+                    if suggested_charts:
+                        st.write("**Recommended Charts:**")
+                        for chart in suggested_charts[:3]:
+                            st.write(f"• {chart.get('type', 'chart').title()}: {chart.get('description', 'No description')}")
+                    
+                    st.divider()
+        
+        if not "saved_anonymisation" in st.session_state and not ("tabular_datasets" in st.session_state and st.session_state.tabular_datasets):
+            st.info("💡 Upload documents or datasets to see AI-powered content insights!")
+        
+        st.divider()
+    
     # Check available data sources for smart expansion with protective logic
     has_documents = bool("vector_db" in st.session_state and st.session_state.vector_db is not None)
     has_datasets = bool("tabular_datasets" in st.session_state and st.session_state.tabular_datasets)
@@ -2587,4 +2663,479 @@ def show_data_sources():
     
     if st.button("📁 Add New Source", use_container_width=True):
         st.switch_page("pages/00_home.py")
+
+# ===== LOCAL CONTENT ANALYSIS FUNCTIONS (ZERO TOKENS) =====
+
+def analyze_document_locally(document_text, entities_data):
+    """
+    Analyze document content without consuming API tokens.
+    Uses local pattern matching and statistical analysis.
+    
+    Args:
+        document_text: The document content as string
+        entities_data: The entities dictionary with Text, Replacement, Category
+    
+    Returns:
+        dict: Document insights without API calls
+    """
+    if not document_text:
+        return {}
+    
+    # Basic text statistics
+    words = document_text.split()
+    word_count = len(words)
+    paragraph_count = len([p for p in document_text.split('\n\n') if p.strip()])
+    sentence_count = len([s for s in re.split(r'[.!?]+', document_text) if s.strip()])
+    
+    # Entity analysis
+    entity_types = set()
+    has_people = False
+    has_organizations = False
+    has_dates = False
+    has_locations = False
+    
+    if entities_data and isinstance(entities_data, dict):
+        categories = entities_data.get('Category', [])
+        if categories:
+            entity_types = set(categories)
+            has_people = any('PERSON' in cat or 'PER' in cat for cat in categories)
+            has_organizations = any('ORG' in cat for cat in categories)
+            has_dates = any('DATE' in cat or 'TIME' in cat for cat in categories)
+            has_locations = any('LOC' in cat or 'GPE' in cat for cat in categories)
+    
+    # Content type detection patterns
+    meeting_indicators = count_meeting_patterns(document_text)
+    action_keywords = count_action_keywords(document_text)
+    question_density = document_text.count('?') / max(word_count, 1) * 1000
+    
+    # Meeting type detection
+    meeting_type = detect_meeting_type(document_text, meeting_indicators, action_keywords)
+    
+    # Content characteristics
+    formal_score = calculate_formality_score(document_text)
+    
+    insights = {
+        'word_count': word_count,
+        'paragraph_count': paragraph_count,
+        'sentence_count': sentence_count,
+        'avg_words_per_sentence': word_count / max(sentence_count, 1),
+        'entity_types': list(entity_types),
+        'has_people': has_people,
+        'has_organizations': has_organizations,
+        'has_dates': has_dates,
+        'has_locations': has_locations,
+        'meeting_indicators': meeting_indicators,
+        'action_keywords': action_keywords,
+        'question_density': question_density,
+        'meeting_type': meeting_type,
+        'formality_score': formal_score,
+        'has_action_items': action_keywords > 3,
+        'is_meeting_transcript': meeting_indicators > 2,
+        'is_formal_document': formal_score > 0.6
+    }
+    
+    return insights
+
+def analyze_dataset_locally(df, dataset_name):
+    """
+    Analyze tabular dataset structure without API calls.
+    Uses pandas built-in functions for statistical analysis.
+    
+    Args:
+        df: pandas DataFrame
+        dataset_name: Name of the dataset
+    
+    Returns:
+        dict: Dataset insights without API calls
+    """
+    if df is None or df.empty:
+        return {}
+    
+    # Basic structure
+    row_count, col_count = df.shape
+    
+    # Column type analysis
+    numeric_columns = list(df.select_dtypes(include=['number']).columns)
+    categorical_columns = list(df.select_dtypes(include=['object', 'category']).columns)
+    datetime_columns = detect_date_columns(df)
+    
+    # Data quality analysis
+    missing_data = df.isnull().sum().to_dict()
+    missing_percentage = {col: (missing / row_count * 100) for col, missing in missing_data.items()}
+    
+    # Key metrics identification
+    key_metrics = identify_metric_columns(df, numeric_columns)
+    
+    # Time series detection
+    has_time_series = len(datetime_columns) > 0 or any('date' in col.lower() or 'time' in col.lower() for col in df.columns)
+    
+    # Suggested visualizations
+    suggested_charts = suggest_charts_locally(df, numeric_columns, categorical_columns, datetime_columns)
+    
+    # Content patterns
+    top_categories = get_top_categories(df, categorical_columns)
+    
+    insights = {
+        'dataset_name': dataset_name,
+        'row_count': row_count,
+        'column_count': col_count,
+        'numeric_columns': numeric_columns,
+        'categorical_columns': categorical_columns,
+        'datetime_columns': datetime_columns,
+        'key_metrics': key_metrics,
+        'has_time_series': has_time_series,
+        'missing_data': missing_data,
+        'missing_percentage': missing_percentage,
+        'suggested_charts': suggested_charts,
+        'top_categories': top_categories,
+        'data_density': (row_count * col_count - sum(missing_data.values())) / (row_count * col_count) * 100
+    }
+    
+    return insights
+
+def count_meeting_patterns(text):
+    """Count patterns that indicate meeting content"""
+    patterns = [
+        r'\bmeeting\b',
+        r'\bdiscussed?\b',
+        r'\bagreed?\b',
+        r'\bdecided?\b',
+        r'\baction\s+item\b',
+        r'\bnext\s+steps?\b',
+        r'\bfollow\s*up\b',
+        r'\battendees?\b',
+        r'\bparticipants?\b',
+        r'\bminutes?\b'
+    ]
+    
+    count = 0
+    for pattern in patterns:
+        count += len(re.findall(pattern, text, re.IGNORECASE))
+    
+    return count
+
+def count_action_keywords(text):
+    """Count action-oriented keywords"""
+    action_words = [
+        r'\bwill\b', r'\bshall\b', r'\bmust\b', r'\bshould\b',
+        r'\btodo\b', r'\baction\b', r'\btask\b', r'\bassign\b',
+        r'\bresponsible\b', r'\bdeadline\b', r'\bby\s+\w+day\b',
+        r'\bimplement\b', r'\bexecute\b', r'\bcomplete\b',
+        r'\bdeliverable\b', r'\bmilestone\b'
+    ]
+    
+    count = 0
+    for pattern in action_words:
+        count += len(re.findall(pattern, text, re.IGNORECASE))
+    
+    return count
+
+def detect_meeting_type(text, meeting_indicators, action_keywords):
+    """Detect the type of meeting based on content patterns"""
+    if meeting_indicators < 2:
+        return "document"
+    
+    # Decision-focused meeting
+    if action_keywords > 5 and any(word in text.lower() for word in ['decision', 'approve', 'reject', 'vote']):
+        return "decision_meeting"
+    
+    # Planning meeting
+    if any(word in text.lower() for word in ['plan', 'strategy', 'roadmap', 'timeline']):
+        return "planning_meeting"
+    
+    # Status/update meeting
+    if any(word in text.lower() for word in ['status', 'update', 'progress', 'report']):
+        return "status_meeting"
+    
+    # General meeting
+    return "general_meeting"
+
+def calculate_formality_score(text):
+    """Calculate formality score based on language patterns"""
+    formal_indicators = [
+        r'\btherefore\b', r'\bhowever\b', r'\bmoreover\b', r'\bfurthermore\b',
+        r'\bconsequently\b', r'\bnevertheless\b', r'\bnotwithstanding\b',
+        r'\bregarding\b', r'\bconcerning\b', r'\bpursuant\b'
+    ]
+    
+    informal_indicators = [
+        r'\byeah\b', r'\bokay\b', r'\boh\b', r'\bum\b', r'\buh\b',
+        r'\bguys\b', r'\bstuff\b', r'\bthings\b', r'\.\.\.', r'\!+'
+    ]
+    
+    formal_count = sum(len(re.findall(pattern, text, re.IGNORECASE)) for pattern in formal_indicators)
+    informal_count = sum(len(re.findall(pattern, text, re.IGNORECASE)) for pattern in informal_indicators)
+    
+    total_words = len(text.split())
+    formal_ratio = formal_count / max(total_words / 100, 1)  # Per 100 words
+    informal_ratio = informal_count / max(total_words / 100, 1)
+    
+    # Score from 0 to 1, where 1 is most formal
+    return min(max(formal_ratio - informal_ratio + 0.5, 0), 1)
+
+def detect_date_columns(df):
+    """Detect columns that contain date/time information"""
+    date_columns = []
+    
+    for col in df.columns:
+        # Check column name patterns
+        if any(pattern in col.lower() for pattern in ['date', 'time', 'created', 'updated', 'timestamp']):
+            date_columns.append(col)
+            continue
+        
+        # Check if column values look like dates
+        if df[col].dtype == 'object':
+            sample_values = df[col].dropna().head(10).astype(str)
+            date_like_count = 0
+            
+            for value in sample_values:
+                # Simple date pattern matching
+                if re.match(r'\d{4}[-/]\d{1,2}[-/]\d{1,2}', value) or \
+                   re.match(r'\d{1,2}[-/]\d{1,2}[-/]\d{4}', value) or \
+                   any(month in value.lower() for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                    date_like_count += 1
+            
+            if date_like_count >= len(sample_values) * 0.7:  # 70% threshold
+                date_columns.append(col)
+    
+    return date_columns
+
+def identify_metric_columns(df, numeric_columns):
+    """Identify the most important numeric columns for analysis"""
+    if not numeric_columns:
+        return []
+    
+    key_metrics = []
+    
+    for col in numeric_columns:
+        # Skip ID-like columns
+        if 'id' in col.lower() and df[col].nunique() == len(df):
+            continue
+        
+        # Prioritize columns with meaningful names
+        if any(keyword in col.lower() for keyword in [
+            'amount', 'value', 'price', 'cost', 'revenue', 'profit',
+            'count', 'total', 'sum', 'average', 'score', 'rating',
+            'percentage', 'rate', 'ratio', 'budget', 'sales'
+        ]):
+            key_metrics.append(col)
+        elif df[col].nunique() > 1:  # Has variation
+            key_metrics.append(col)
+    
+    # Return top 5 most important metrics
+    return key_metrics[:5]
+
+def suggest_charts_locally(df, numeric_columns, categorical_columns, datetime_columns):
+    """Suggest appropriate chart types based on data structure"""
+    suggestions = []
+    
+    # Time series charts
+    if datetime_columns and numeric_columns:
+        suggestions.append({
+            'type': 'line',
+            'description': f'Time trends for {", ".join(numeric_columns[:3])}',
+            'x_column': datetime_columns[0],
+            'y_columns': numeric_columns[:3]
+        })
+    
+    # Bar charts for categorical data
+    if categorical_columns and numeric_columns:
+        suggestions.append({
+            'type': 'bar',
+            'description': f'Comparison by {categorical_columns[0]}',
+            'x_column': categorical_columns[0],
+            'y_column': numeric_columns[0]
+        })
+    
+    # Distribution charts
+    if numeric_columns:
+        suggestions.append({
+            'type': 'histogram',
+            'description': f'Distribution of {numeric_columns[0]}',
+            'column': numeric_columns[0]
+        })
+    
+    # Correlation analysis
+    if len(numeric_columns) >= 2:
+        suggestions.append({
+            'type': 'scatter',
+            'description': f'Relationship between {numeric_columns[0]} and {numeric_columns[1]}',
+            'x_column': numeric_columns[0],
+            'y_column': numeric_columns[1]
+        })
+    
+    return suggestions[:4]  # Return top 4 suggestions
+
+def get_top_categories(df, categorical_columns):
+    """Get top categories from categorical columns"""
+    top_categories = {}
+    
+    for col in categorical_columns[:3]:  # Analyze first 3 categorical columns
+        if df[col].nunique() <= 20:  # Only for columns with reasonable number of categories
+            value_counts = df[col].value_counts().head(5)
+            top_categories[col] = value_counts.to_dict()
+    
+    return top_categories
+
+def generate_smart_templates_locally(document_insights=None, dataset_insights=None):
+    """
+    Generate contextual prompt templates based on local analysis.
+    No API tokens consumed.
+    
+    Args:
+        document_insights: Results from analyze_document_locally()
+        dataset_insights: Dictionary of dataset_name -> analyze_dataset_locally() results
+    
+    Returns:
+        dict: Smart template prompts based on content analysis
+    """
+    templates = {}
+    
+    # Document-based smart templates
+    if document_insights:
+        word_count = document_insights.get('word_count', 0)
+        meeting_type = document_insights.get('meeting_type', 'document')
+        has_action_items = document_insights.get('has_action_items', False)
+        has_people = document_insights.get('has_people', False)
+        has_organizations = document_insights.get('has_organizations', False)
+        is_formal = document_insights.get('is_formal_document', False)
+        
+        if meeting_type == 'decision_meeting':
+            templates['🎯 Decision Summary'] = """Extract and organize all decisions made in this meeting:
+
+**Key Decisions:** What was decided and why
+**Decision Context:** Background information for each decision
+**Implementation Plan:** How decisions will be executed
+**Responsible Parties:** Who is accountable for each decision
+**Timeline:** When decisions need to be implemented
+
+Focus on actionable outcomes and clear accountability."""
+        
+        elif meeting_type == 'planning_meeting':
+            templates['📋 Strategic Plan'] = """Create a comprehensive planning summary:
+
+**Strategic Objectives:** Main goals and targets discussed
+**Action Plan:** Step-by-step implementation approach
+**Resource Requirements:** People, budget, and materials needed
+**Timeline & Milestones:** Key dates and checkpoints
+**Success Metrics:** How progress will be measured
+
+Format as an executive planning document."""
+        
+        elif meeting_type == 'status_meeting':
+            templates['📊 Status Report'] = """Generate a professional status report:
+
+**Current Progress:** What has been accomplished
+**Key Metrics:** Quantifiable progress indicators  
+**Challenges & Risks:** Issues that need attention
+**Next Steps:** Immediate actions required
+**Resource Status:** Team, budget, and timeline updates
+
+Structure as a formal status update for leadership."""
+        
+        if has_action_items:
+            templates['✅ Action Item Tracker'] = """Create a detailed action item list:
+
+**Immediate Actions (1-2 weeks):** Urgent tasks with deadlines
+**Medium-term Actions (1-3 months):** Important ongoing work
+**Long-term Commitments (3+ months):** Strategic initiatives
+**Responsible Parties:** Clear ownership for each item
+**Dependencies:** What needs to happen first
+
+Format as a trackable task management list."""
+        
+        if has_people and has_organizations:
+            templates['🏢 Stakeholder Analysis'] = """Analyze stakeholder involvement and relationships:
+
+**Key Stakeholders:** Important people and their roles
+**Organizational Dynamics:** How different groups interact
+**Decision Makers:** Who has authority and influence
+**Communication Needs:** How stakeholders should be engaged
+**Relationship Map:** Connections between parties
+
+Provide strategic stakeholder management insights."""
+        
+        if is_formal and word_count > 2000:
+            templates['📄 Executive Summary'] = """Create a concise executive summary for leadership:
+
+**Purpose & Scope:** Why this document matters
+**Key Findings:** Most important insights and conclusions
+**Strategic Implications:** What this means for the organization
+**Recommendations:** Specific actions leadership should consider
+**Next Steps:** Immediate follow-up required
+
+Write in formal executive communication style."""
+    
+    # Dataset-based smart templates
+    if dataset_insights:
+        for dataset_name, insights in dataset_insights.items():
+            row_count = insights.get('row_count', 0)
+            numeric_cols = insights.get('numeric_columns', [])
+            categorical_cols = insights.get('categorical_columns', [])
+            has_time_series = insights.get('has_time_series', False)
+            key_metrics = insights.get('key_metrics', [])
+            
+            # Time-based analysis
+            if has_time_series and numeric_cols:
+                templates[f'📈 Trend Analysis - {dataset_name}'] = f"""Analyze trends and patterns over time in {dataset_name}:
+
+**Overall Trends:** Direction and magnitude of changes in {', '.join(key_metrics[:3])}
+**Seasonal Patterns:** Recurring cycles or seasonal variations
+**Growth Rates:** Calculate period-over-period growth rates
+**Trend Analysis:** What the data tells us about future direction
+**Key Insights:** Most important findings from temporal analysis
+
+Create line charts showing trends over time and highlight significant changes."""
+            
+            # Categorical comparison
+            if categorical_cols and numeric_cols:
+                templates[f'⚖️ Performance Comparison - {dataset_name}'] = f"""Compare performance across different groups in {dataset_name}:
+
+**Group Rankings:** Rank {categorical_cols[0]} by {numeric_cols[0] if numeric_cols else 'performance'}
+**Performance Gaps:** Identify best and worst performers
+**Statistical Analysis:** Show averages, medians, and distributions by group
+**Key Differences:** What makes top performers different
+**Actionable Insights:** Recommendations based on performance patterns
+
+Create bar charts and comparison tables showing group differences."""
+            
+            # Data overview for large datasets
+            if row_count > 1000:
+                templates[f'📊 Data Deep Dive - {dataset_name}'] = f"""Provide comprehensive analysis of {dataset_name} ({row_count:,} records):
+
+**Data Profile:** Key statistics and distributions for main metrics
+**Top Insights:** 5 most important patterns or findings
+**Quality Assessment:** Data completeness and any anomalies
+**Correlation Analysis:** Relationships between different variables
+**Segmentation:** Identify distinct groups or clusters in the data
+
+Create multiple visualizations highlighting key findings."""
+            
+            # Quick insights for smaller datasets
+            else:
+                templates[f'🔍 Quick Insights - {dataset_name}'] = f"""Generate quick insights from {dataset_name}:
+
+**Top Performers:** Highest values in key metrics
+**Key Patterns:** Notable trends or relationships
+**Summary Statistics:** Essential numbers every stakeholder should know
+**Recommended Actions:** What the data suggests we should do
+**Visual Summary:** 2-3 charts that tell the story
+
+Focus on the most actionable insights."""
+    
+    # Cross-source templates (when both documents and datasets available)
+    if document_insights and dataset_insights:
+        templates['🔗 Integrated Analysis'] = """Combine insights from documents and data sources:
+
+**Document Context:** Key themes and decisions from text analysis
+**Data Validation:** How the numerical data supports or contradicts document insights
+**Comprehensive View:** What the complete picture tells us
+**Evidence-Based Recommendations:** Suggestions backed by both qualitative and quantitative evidence
+**Action Plan:** Next steps based on integrated analysis
+
+Create a unified analysis that leverages both data types."""
+    
+    return templates
+
+# ===== END LOCAL ANALYSIS FUNCTIONS =====
 
