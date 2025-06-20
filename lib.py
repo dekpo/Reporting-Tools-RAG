@@ -2315,75 +2315,12 @@ def optimize_agent_result(result):
 def show_data_sources():
     st.markdown("**Manage your document and tabular data sources for AI analysis**")
     
-    # Content insights toggle
-    show_insights = st.checkbox("🔍 Show Content Insights", help="Display AI-powered analysis of your content (no tokens consumed)")
+    # Add New Source Section - moved to top
+    st.markdown("### 📁 Add New Sources")
+    st.markdown("*Upload new documents or datasets to expand your analysis capabilities*")
     
-    # Perform content analysis if requested
-    if show_insights:
-        st.divider()
-        st.subheader("📋 Content Analysis Summary")
-        
-        # Document insights
-        if "saved_anonymisation" in st.session_state:
-            document_content = st.session_state["saved_anonymisation"].get("Data", "")
-            document_entities = st.session_state["saved_anonymisation"].get("Entities", {})
-            if document_content:
-                with st.expander("📄 Document Insights", expanded=True):
-                    insights = analyze_document_locally(document_content, document_entities)
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Content Type", insights.get('meeting_type', 'document').replace('_', ' ').title())
-                    with col2:
-                        st.metric("Word Count", f"{insights.get('word_count', 0):,}")
-                    with col3:
-                        st.metric("Formality Score", f"{insights.get('formality_score', 0):.1%}")
-                    with col4:
-                        action_status = "✅ Yes" if insights.get('has_action_items') else "❌ No"
-                        st.metric("Has Actions", action_status)
-                    
-                    # Entity breakdown
-                    entity_types = insights.get('entity_types', [])
-                    if entity_types:
-                        st.write("**Detected Entities:**")
-                        entity_counts = {}
-                        for entity_type in entity_types:
-                            entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
-                        
-                        for entity_type, count in entity_counts.items():
-                            st.write(f"• {entity_type}: {count} instances")
-        
-        # Dataset insights
-        if "tabular_datasets" in st.session_state and st.session_state.tabular_datasets:
-            with st.expander("📊 Dataset Insights", expanded=True):
-                for dataset_name, df in st.session_state.tabular_datasets.items():
-                    insights = analyze_dataset_locally(df, dataset_name)
-                    
-                    st.write(f"**{dataset_name}**")
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Rows", f"{insights.get('row_count', 0):,}")
-                    with col2:
-                        st.metric("Columns", insights.get('column_count', 0))
-                    with col3:
-                        st.metric("Key Metrics", len(insights.get('key_metrics', [])))
-                    with col4:
-                        data_quality = f"{insights.get('data_density', 0):.1f}%"
-                        st.metric("Data Quality", data_quality)
-                    
-                    # Show suggested charts
-                    suggested_charts = insights.get('suggested_charts', [])
-                    if suggested_charts:
-                        st.write("**Recommended Charts:**")
-                        for chart in suggested_charts[:3]:
-                            st.write(f"• {chart.get('type', 'chart').title()}: {chart.get('description', 'No description')}")
-                    
-                    st.divider()
-        
-        if not "saved_anonymisation" in st.session_state and not ("tabular_datasets" in st.session_state and st.session_state.tabular_datasets):
-            st.info("💡 Upload documents or datasets to see AI-powered content insights!")
-        
-        st.divider()
+    if st.button("📁 Add New Source", use_container_width=True):
+        st.switch_page("pages/00_home.py")
     
     # Check available data sources for smart expansion with protective logic
     has_documents = bool("vector_db" in st.session_state and st.session_state.vector_db is not None)
@@ -2448,6 +2385,15 @@ def show_data_sources():
                 # Sort by timestamp (newest first)
                 doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
                 
+                # Table headers
+                col1, col2, col3 = st.columns([0.6, 0.15, 0.25])
+                with col1:
+                    st.markdown("**File**")
+                with col2:
+                    st.markdown("**Date**")
+                with col3:
+                    st.markdown("")  # No header for remove button
+                
                 # Create selection interface
                 selected_docs = []
                 for doc in doc_list:
@@ -2465,9 +2411,9 @@ def show_data_sources():
                         from datetime import datetime
                         try:
                             timestamp = datetime.fromtimestamp(doc["timestamp"])
-                            st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                            st.write(timestamp.strftime('%Y-%m-%d'))
                         except (ValueError, OSError):
-                            st.caption("Added: Unknown")
+                            st.write("Unknown")
                     
                     with col3:
                         if st.button("Remove", key=f"remove_{doc['hash']}"):
@@ -2482,7 +2428,10 @@ def show_data_sources():
                             else:
                                 # Set confirmation state and show confirmation message
                                 st.session_state["confirm_delete"] = doc['hash']
-                                st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+                    
+                    # Show confirmation message below item if needed
+                    if st.session_state.get("confirm_delete") == doc['hash']:
+                        st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
                 
                 # Store selected documents in session state
                 if "selected_doc_sources" not in st.session_state or st.session_state.selected_doc_sources != selected_docs:
@@ -2494,11 +2443,7 @@ def show_data_sources():
                 save_document_metadata(persist_directory, document_metadata)
                 
                 # Add Clear Vector Database button at the end of document list
-                st.divider()
                 if hasattr(st.session_state, 'RAG_AVAILABLE') or RAG_AVAILABLE:
-                    # Warning message before the button
-                    st.warning("This will remove all documents from the database. This action cannot be undone.", icon="⚠️")
-                    
                     # Full-width button with confirmation
                     if st.button("Clear All Documents", type="secondary", use_container_width=True):
                         # Show confirmation dialog
@@ -2524,7 +2469,10 @@ def show_data_sources():
                         else:
                             # Set confirmation state and show confirmation message
                             st.session_state["confirm_clear_all"] = True
-                            st.error("Click 'Clear All Documents' again to confirm deletion of ALL documents.", icon="⚠️")
+                    
+                    # Show confirmation message below button if needed
+                    if st.session_state.get("confirm_clear_all"):
+                        st.error("Click 'Clear All Documents' again to confirm deletion of ALL documents. This action cannot be undone.", icon="⚠️")
             else:
                 st.info("No documents found in the database. Process a document to add it to the sources.")
         else:
@@ -2580,6 +2528,15 @@ def show_data_sources():
                 # Sort by timestamp (newest first)
                 dataset_list.sort(key=lambda x: x["timestamp"], reverse=True)
                 
+                # Table headers
+                col1, col2, col3 = st.columns([0.6, 0.15, 0.25])
+                with col1:
+                    st.markdown("**File**")
+                with col2:
+                    st.markdown("**Date**")
+                with col3:
+                    st.markdown("")  # No header for remove button
+                
                 # Create selection interface
                 selected_datasets = []
                 for dataset in dataset_list:
@@ -2597,9 +2554,9 @@ def show_data_sources():
                         from datetime import datetime
                         try:
                             timestamp = datetime.fromtimestamp(dataset["timestamp"])
-                            st.caption(f"Added: {timestamp.strftime('%Y-%m-%d')}")
+                            st.write(timestamp.strftime('%Y-%m-%d'))
                         except (ValueError, OSError):
-                            st.caption("Added: Unknown")
+                            st.write("Unknown")
                     
                     with col3:
                         if st.button("Remove", key=f"remove_dataset_{dataset['hash']}"):
@@ -2614,7 +2571,10 @@ def show_data_sources():
                             else:
                                 # Set confirmation state and show confirmation message
                                 st.session_state["confirm_delete_dataset"] = dataset['hash']
-                                st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+                    
+                    # Show confirmation message below item if needed
+                    if st.session_state.get("confirm_delete_dataset") == dataset['hash']:
+                        st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
                 
                 # Store selected datasets in session state
                 if "selected_datasets" not in st.session_state or st.session_state.selected_datasets != selected_datasets:
@@ -2626,9 +2586,6 @@ def show_data_sources():
                 # Note: We would need to add a save function for tabular metadata if we want to persist active status
                 
                 # Add Clear All Datasets button
-                st.divider()
-                st.warning("This will remove all datasets from storage. This action cannot be undone.", icon="⚠️")
-                
                 if st.button("Clear All Datasets", type="secondary", use_container_width=True):
                     if st.session_state.get("confirm_clear_all_datasets"):
                         with st.spinner("Clearing all tabular datasets..."):
@@ -2648,7 +2605,10 @@ def show_data_sources():
                     else:
                         # Set confirmation state and show confirmation message
                         st.session_state["confirm_clear_all_datasets"] = True
-                        st.error("Click 'Clear All Datasets' again to confirm deletion of ALL datasets.", icon="⚠️")
+                
+                # Show confirmation message below button if needed
+                if st.session_state.get("confirm_clear_all_datasets"):
+                    st.error("Click 'Clear All Datasets' again to confirm deletion of ALL datasets. This action cannot be undone.", icon="⚠️")
             else:
                 st.info("No datasets found in storage. Upload a CSV or Excel file to add datasets.")
                 st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
@@ -2656,13 +2616,74 @@ def show_data_sources():
             st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to add datasets.")
             st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
     
-    # Add New Source Section
-    st.divider()
-    st.markdown("### 📁 Add New Sources")
-    st.markdown("*Upload new documents or datasets to expand your analysis capabilities*")
+    # Content insights toggle section - moved to end
+    st.markdown("### 🔍 Content Insights")
+    show_insights = st.checkbox("Show Content Insights", help="Display AI-powered analysis of your content (no tokens consumed)")
     
-    if st.button("📁 Add New Source", use_container_width=True):
-        st.switch_page("pages/00_home.py")
+    # Perform content analysis if requested
+    if show_insights:
+        st.subheader("📋 Content Analysis Summary")
+        
+        # Document insights
+        if "saved_anonymisation" in st.session_state:
+            document_content = st.session_state["saved_anonymisation"].get("Data", "")
+            document_entities = st.session_state["saved_anonymisation"].get("Entities", {})
+            if document_content:
+                with st.expander("📄 Document Insights", expanded=True):
+                    insights = analyze_document_locally(document_content, document_entities)
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Content Type", insights.get('meeting_type', 'document').replace('_', ' ').title())
+                    with col2:
+                        st.metric("Word Count", f"{insights.get('word_count', 0):,}")
+                    with col3:
+                        st.metric("Formality Score", f"{insights.get('formality_score', 0):.1%}")
+                    with col4:
+                        action_status = "✅ Yes" if insights.get('has_action_items') else "❌ No"
+                        st.metric("Has Actions", action_status)
+                    
+                    # Entity breakdown
+                    entity_types = insights.get('entity_types', [])
+                    if entity_types:
+                        st.write("**Detected Entities:**")
+                        entity_counts = {}
+                        for entity_type in entity_types:
+                            entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+                        
+                        for entity_type, count in entity_counts.items():
+                            st.write(f"• {entity_type}: {count} instances")
+        
+        # Dataset insights
+        if "tabular_datasets" in st.session_state and st.session_state.tabular_datasets:
+            with st.expander("📊 Dataset Insights", expanded=True):
+                for dataset_name, df in st.session_state.tabular_datasets.items():
+                    insights = analyze_dataset_locally(df, dataset_name)
+                    
+                    st.write(f"**{dataset_name}**")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Rows", f"{insights.get('row_count', 0):,}")
+                    with col2:
+                        st.metric("Columns", insights.get('column_count', 0))
+                    with col3:
+                        st.metric("Key Metrics", len(insights.get('key_metrics', [])))
+                    with col4:
+                        data_quality = f"{insights.get('data_density', 0):.1f}%"
+                        st.metric("Data Quality", data_quality)
+                    
+                    # Show suggested charts
+                    suggested_charts = insights.get('suggested_charts', [])
+                    if suggested_charts:
+                        st.write("**Recommended Charts:**")
+                        for chart in suggested_charts[:3]:
+                            st.write(f"• {chart.get('type', 'chart').title()}: {chart.get('description', 'No description')}")
+                    
+                    if dataset_name != list(st.session_state.tabular_datasets.keys())[-1]:  # Not the last item
+                        st.markdown("---")
+        
+        if not "saved_anonymisation" in st.session_state and not ("tabular_datasets" in st.session_state and st.session_state.tabular_datasets):
+            st.info("💡 Upload documents or datasets to see AI-powered content insights!")
 
 # ===== LOCAL CONTENT ANALYSIS FUNCTIONS (ZERO TOKENS) =====
 

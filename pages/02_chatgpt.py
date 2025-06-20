@@ -815,7 +815,7 @@ Provide clear, actionable recommendations."""
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("💡 Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Get AI-powered prompt suggestions based on your content"):
+            if st.button(type="primary", label="💡 Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Get AI-powered prompt suggestions based on your content"):
                 show_prompt_assistant()
         
         with col2:
