@@ -155,6 +155,7 @@ def extract_pdf_content(file_content, file_hash):
 @st.cache_data
 def process_csv_file(file_content, file_hash):
     """Process CSV file and return DataFrame with caching"""
+    
     try:
         # ORIGINAL APPROACH: Use delimiter detection (works for most CSV files)
         separator = lib.get_delimiter(io.BytesIO(file_content))
@@ -409,6 +410,7 @@ elif st.session_state.file_category == "data":
                 # Only show spinner when actually processing
                 with st.spinner('Processing CSV file... Please Wait.'):
                     df, processing_success = process_csv_file(file_content, file_hash)
+                    
                     # Cache the result
                     st.session_state[cache_key] = {"dataframe": df, "success": processing_success}
             else:
@@ -416,6 +418,8 @@ elif st.session_state.file_category == "data":
                 cached_result = st.session_state[cache_key]
                 df = cached_result["dataframe"]
                 processing_success = cached_result["success"]
+                
+
             
             if processing_success and df is not None:
                 st.success(f"CSV file processed successfully! Found {df.shape[0]} rows and {df.shape[1]} columns.")
@@ -487,9 +491,27 @@ if st.session_state.file_category == "data":
         elif "tabular_datasets" not in st.session_state or not st.session_state.tabular_datasets:
             st.error("Please upload a CSV or Excel file first.")
         else:
-            # Get the uploaded file info
-            temp_key = list(st.session_state.tabular_datasets.keys())[0]
+            # Get the uploaded file info - find the correct temp dataset for this file
+            # Look for temp key that matches the current uploaded file
+            temp_key = None
+            if uploaded_file is not None:
+                expected_temp_key = f"temp_{uploaded_file.name}"
+                if expected_temp_key in st.session_state.tabular_datasets:
+                    temp_key = expected_temp_key
+                else:
+                    # Fallback: look for any temp key
+                    for key in st.session_state.tabular_datasets.keys():
+                        if key.startswith("temp_"):
+                            temp_key = key
+                            break
+            
+            # If no temp key found, use first available
+            if temp_key is None:
+                temp_key = list(st.session_state.tabular_datasets.keys())[0]
+            
             df = st.session_state.tabular_datasets[temp_key]
+            
+
             
             # Generate proper file hash and save persistently
             if uploaded_file is not None:
@@ -498,7 +520,9 @@ if st.session_state.file_category == "data":
                 detected_type = detect_file_type(uploaded_file, "data")
                 file_hash = lib.generate_file_hash(file_content, uploaded_file.name, detected_type)
                 
-                # Save tabular metadata for persistence
+                # Clear Streamlit cache to prevent corruption
+                st.cache_data.clear()
+                
                 lib.save_tabular_metadata(title_input, df, file_hash)
                 
                 # Clean up temporary dataset and replace with properly titled one

@@ -1290,9 +1290,36 @@ def save_tabular_metadata(title, df, file_hash):
     # Create directory if it doesn't exist
     os.makedirs("./data_storage", exist_ok=True)
     
+    # Debug logging to track what's being saved
+    if st.session_state.get("show_debug", False):
+        st.write(f"🔧 DEBUG SAVE: Saving '{title}' with hash '{file_hash}'")
+        st.write(f"🔧 DEBUG SAVE: Input DataFrame shape: {df.shape}")
+        st.write(f"🔧 DEBUG SAVE: Input DataFrame columns: {list(df.columns)}")
+        st.write(f"🔧 DEBUG SAVE: Input DataFrame memory ID: {id(df)}")
+        st.write(f"🔧 DEBUG SAVE: First few values of first column: {df.iloc[:3, 0].tolist()}")
+    
     # Save DataFrame to parquet for efficient storage
     df_path = f"./data_storage/{file_hash}.parquet"
-    df.to_parquet(df_path)
+    
+    # Create a copy to avoid any reference issues during save
+    df_to_save = df.copy()
+    df_to_save.to_parquet(df_path)
+    
+    # Verify what was actually saved by reading it back immediately
+    if st.session_state.get("show_debug", False):
+        try:
+            verification_df = pd.read_parquet(df_path)
+            st.write(f"🔧 DEBUG SAVE: Verification read - Shape: {verification_df.shape}")
+            st.write(f"🔧 DEBUG SAVE: Verification read - Columns: {list(verification_df.columns)}")
+            st.write(f"🔧 DEBUG SAVE: Verification read - First few values: {verification_df.iloc[:3, 0].tolist()}")
+            
+            # Check if verification matches input
+            if verification_df.shape != df.shape:
+                st.error(f"🚨 SAVE ERROR: Shape mismatch! Input: {df.shape}, Saved: {verification_df.shape}")
+            if list(verification_df.columns) != list(df.columns):
+                st.error(f"🚨 SAVE ERROR: Column mismatch! Input: {list(df.columns)}, Saved: {list(verification_df.columns)}")
+        except Exception as verify_error:
+            st.error(f"🚨 SAVE ERROR: Could not verify saved file: {verify_error}")
     
     # Load existing metadata
     if os.path.exists(metadata_path):
@@ -1300,6 +1327,12 @@ def save_tabular_metadata(title, df, file_hash):
             metadata = json.load(f)
     else:
         metadata = {}
+    
+    # Check for hash collisions
+    if file_hash in metadata:
+        existing_title = metadata[file_hash].get("title", "Unknown")
+        if st.session_state.get("show_debug", False):
+            st.warning(f"🚨 HASH COLLISION: Hash '{file_hash}' already exists for '{existing_title}'! Overwriting with '{title}'")
     
     # Add new dataset metadata
     metadata[file_hash] = {
@@ -1314,6 +1347,10 @@ def save_tabular_metadata(title, df, file_hash):
     # Save updated metadata
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
+    
+    if st.session_state.get("show_debug", False):
+        st.write(f"🔧 DEBUG SAVE: Successfully saved metadata for '{title}' at {df_path}")
+        st.write(f"🔧 DEBUG SAVE: Total datasets in metadata: {len(metadata)}")
 
 def load_tabular_datasets():
     """
@@ -1341,11 +1378,26 @@ def load_tabular_datasets():
         try:
             if os.path.exists(info["file_path"]):
                 df = pd.read_parquet(info["file_path"])
-                datasets[info["title"]] = df
+                
+                # Debug logging to verify correct data is being loaded
+                if st.session_state.get("show_debug", False):
+                    st.write(f"🔧 DEBUG LOAD: Loading '{info['title']}' from {info['file_path']}")
+                    st.write(f"🔧 DEBUG LOAD: Shape: {df.shape}")
+                    st.write(f"🔧 DEBUG LOAD: Columns: {list(df.columns)}")
+                    st.write(f"🔧 DEBUG LOAD: Memory ID: {id(df)}")
+                
+                # Create a fresh copy to avoid any reference issues
+                datasets[info["title"]] = df.copy()
             else:
                 st.warning(f"Dataset file not found: {info['title']}")
         except Exception as e:
             st.warning(f"Could not load dataset {info['title']}: {e}")
+    
+    # Additional debug info for the final datasets dictionary
+    if st.session_state.get("show_debug", False):
+        st.write(f"🔧 DEBUG LOAD: Final datasets dictionary keys: {list(datasets.keys())}")
+        for name, df in datasets.items():
+            st.write(f"🔧 DEBUG LOAD: Final '{name}' - Shape: {df.shape}, Memory ID: {id(df)}")
     
     return datasets
 
@@ -1456,8 +1508,20 @@ def clear_all_tabular_data():
 
 def generate_file_hash(file_content, file_name, file_type):
     """Generate a unique hash for uploaded file to enable caching"""
-    content_str = f"{file_name}_{file_type}_{len(file_content)}"
-    return hashlib.md5(content_str.encode()).hexdigest()
+    # Use actual file content for hash to ensure uniqueness
+    import hashlib
+    
+    # Create hash from file content + metadata to ensure uniqueness
+    if isinstance(file_content, bytes):
+        content_hash = hashlib.md5(file_content).hexdigest()
+    else:
+        content_hash = hashlib.md5(str(file_content).encode('utf-8')).hexdigest()
+    
+    # Combine content hash with metadata for extra uniqueness
+    combined_str = f"{file_name}_{file_type}_{len(file_content)}_{content_hash}"
+    final_hash = hashlib.md5(combined_str.encode()).hexdigest()
+    
+    return final_hash
 
 # ===== TOOL DEFINITIONS FOR MULTI-MODAL AGENT =====
 
@@ -2313,14 +2377,14 @@ def optimize_agent_result(result):
 # Data Sources Dialog Function
 @st.dialog("📊 Data Sources Management", width="large")
 def show_data_sources():
-    st.markdown("**Manage your document and tabular data sources for AI analysis**")
-    
     # Add New Source Section - moved to top
     st.markdown("### 📁 Add New Sources")
     st.markdown("*Upload new documents or datasets to expand your analysis capabilities*")
     
     if st.button("📁 Add New Source", use_container_width=True):
         st.switch_page("pages/00_home.py")
+    
+    st.markdown("**Manage your document and tabular data sources for AI analysis**")
     
     # Check available data sources for smart expansion with protective logic
     has_documents = bool("vector_db" in st.session_state and st.session_state.vector_db is not None)
@@ -2349,7 +2413,7 @@ def show_data_sources():
     datasets_expanded = bool(has_datasets and not has_documents)
 
     # Document Sources Section with Expander
-    with st.expander("📄 Document Sources", expanded=documents_expanded):
+    with st.expander("📄 **Document Sources**", expanded=documents_expanded):
         # Check both session state and persistent storage for robustness
         session_has_documents = "vector_db" in st.session_state and st.session_state.vector_db is not None
         
@@ -2480,7 +2544,7 @@ def show_data_sources():
             st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
 
     # Tabular Dataset Sources Section with Expander
-    with st.expander("📊 Tabular Data Sources", expanded=datasets_expanded):
+    with st.expander("📊 **Tabular Data Sources**", expanded=datasets_expanded):
         # Check both session state and persistent storage for robustness
         session_has_datasets = "tabular_datasets" in st.session_state and bool(st.session_state.tabular_datasets)
         
@@ -2616,7 +2680,7 @@ def show_data_sources():
             st.info("📊 No tabular datasets loaded. Upload CSV or Excel files on the Home page to add datasets.")
             st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
     
-    # Content insights toggle section - moved to end
+    # Content insights toggle section
     st.markdown("### 🔍 Content Insights")
     show_insights = st.checkbox("Show Content Insights", help="Display AI-powered analysis of your content (no tokens consumed)")
     
@@ -2658,7 +2722,8 @@ def show_data_sources():
         if "tabular_datasets" in st.session_state and st.session_state.tabular_datasets:
             with st.expander("📊 Dataset Insights", expanded=True):
                 for dataset_name, df in st.session_state.tabular_datasets.items():
-                    insights = analyze_dataset_locally(df, dataset_name)
+                    # Call analysis with fresh DataFrame reference
+                    insights = analyze_dataset_locally(df.copy(), dataset_name)
                     
                     st.write(f"**{dataset_name}**")
                     col1, col2, col3, col4 = st.columns(4)
@@ -2671,6 +2736,22 @@ def show_data_sources():
                     with col4:
                         data_quality = f"{insights.get('data_density', 0):.1f}%"
                         st.metric("Data Quality", data_quality)
+                    
+                    # Show column headers in original order
+                    all_columns = list(df.columns)
+                    
+                    st.write("**Column Headers:**")
+                    
+                    # Display columns in original order, with smart truncation
+                    if len(all_columns) <= 12:
+                        # Show all columns if 12 or fewer
+                        st.write(f"*({len(all_columns)} columns):* {', '.join(all_columns)}")
+                    else:
+                        # Show first 10 columns and indicate how many more
+                        displayed_columns = all_columns[:10]
+                        remaining_count = len(all_columns) - 10
+                        st.write(f"*({len(all_columns)} columns):* {', '.join(displayed_columns)}")
+                        st.caption(f"... and {remaining_count} more columns")
                     
                     # Show suggested charts
                     suggested_charts = insights.get('suggested_charts', [])
