@@ -205,43 +205,115 @@ def sidebar():
         
         # Document Sources
         if document_metadata:
-            st.sidebar.write(":page_with_curl: **Document Sources**")
+            # Count active vs total documents
+            active_docs = sum(1 for doc_data in document_metadata.values() if doc_data.get("active", True))
+            total_docs = len(document_metadata)
+            
+            if active_docs == total_docs:
+                st.sidebar.write(f":page_with_curl: **Document Sources** ({total_docs} active)")
+            else:
+                st.sidebar.write(f":page_with_curl: **Document Sources** ({active_docs}/{total_docs} active)")
+            
             # Convert metadata to list and sort by timestamp (newest first)
             doc_list = []
             for doc_hash, doc_data in document_metadata.items():
                 doc_list.append({
                     "title": doc_data["title"],
-                    "timestamp": doc_data.get("timestamp", 0)
+                    "timestamp": doc_data.get("timestamp", 0),
+                    "active": doc_data.get("active", True)
                 })
             doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
             
-            # Display truncated document names
+            # Display documents with status indicators and longer titles
             for doc in doc_list[:5]:  # Show max 5 to avoid sidebar overflow
-                truncated_title = doc["title"][:15] + "..." if len(doc["title"]) > 15 else doc["title"]
-                st.sidebar.caption(f"• {truncated_title}")
+                truncated_title = doc["title"][:28] + "..." if len(doc["title"]) > 28 else doc["title"]
+                if doc["active"]:
+                    status_icon = "✅"
+                    st.sidebar.markdown(f'<p style="color: #262730; font-size: 14px; margin: 0; line-height: 1.2;">{status_icon} {truncated_title}</p>', unsafe_allow_html=True)
+                else:
+                    status_icon = "❌"
+                    st.sidebar.markdown(f'<p style="color: #9CA3AF; font-size: 14px; margin: 0; line-height: 1.2;">{status_icon} {truncated_title}</p>', unsafe_allow_html=True)
             
             if len(doc_list) > 5:
-                st.sidebar.caption(f"• ... and {len(doc_list) - 5} more")
+                remaining_docs = doc_list[5:]
+                active_remaining = sum(1 for doc in remaining_docs if doc["active"])
+                inactive_remaining = len(remaining_docs) - active_remaining
+                if active_remaining and inactive_remaining:
+                    st.sidebar.caption(f"• ... and {len(remaining_docs)} more ({active_remaining} active, {inactive_remaining} inactive)")
+                elif active_remaining:
+                    st.sidebar.caption(f"• ... and {active_remaining} more (all active)")
+                elif inactive_remaining:
+                    st.sidebar.caption(f"• ... and {inactive_remaining} more (all inactive)")
+                else:
+                    st.sidebar.caption(f"• ... and {len(remaining_docs)} more")
         
         # Tabular Data Sources
         if tabular_metadata:
-            st.sidebar.write(":bar_chart: **Tabular Data Sources**")
+            # Add spacing before tabular section if there were documents above
+            if document_metadata:
+                st.sidebar.markdown("<br>", unsafe_allow_html=True)
+            
+            # Count active vs total datasets
+            active_datasets = sum(1 for dataset_data in tabular_metadata.values() if dataset_data.get("active", True))
+            total_datasets = len(tabular_metadata)
+            
+            if active_datasets == total_datasets:
+                st.sidebar.write(f":bar_chart: **Tabular Data Sources** ({total_datasets} active)")
+            else:
+                st.sidebar.write(f":bar_chart: **Tabular Data Sources** ({active_datasets}/{total_datasets} active)")
+            
             # Convert metadata to list and sort by timestamp (newest first)
             dataset_list = []
             for file_hash, dataset_data in tabular_metadata.items():
                 dataset_list.append({
                     "title": dataset_data["title"],
-                    "timestamp": dataset_data.get("timestamp", 0)
+                    "timestamp": dataset_data.get("timestamp", 0),
+                    "active": dataset_data.get("active", True)
                 })
             dataset_list.sort(key=lambda x: x["timestamp"], reverse=True)
             
-            # Display truncated dataset names
+            # Display datasets with status indicators and longer titles
             for dataset in dataset_list[:5]:  # Show max 5 to avoid sidebar overflow
-                truncated_title = dataset["title"][:15] + "..." if len(dataset["title"]) > 15 else dataset["title"]
-                st.sidebar.caption(f"• {truncated_title}")
+                truncated_title = dataset["title"][:28] + "..." if len(dataset["title"]) > 28 else dataset["title"]
+                if dataset["active"]:
+                    status_icon = "✅"
+                    st.sidebar.markdown(f'<p style="color: #262730; font-size: 14px; margin: 0; line-height: 1.2;">{status_icon} {truncated_title}</p>', unsafe_allow_html=True)
+                else:
+                    status_icon = "❌"
+                    st.sidebar.markdown(f'<p style="color: #9CA3AF; font-size: 14px; margin: 0; line-height: 1.2;">{status_icon} {truncated_title}</p>', unsafe_allow_html=True)
             
             if len(dataset_list) > 5:
-                st.sidebar.caption(f"• ... and {len(dataset_list) - 5} more")
+                remaining_datasets = dataset_list[5:]
+                active_remaining = sum(1 for dataset in remaining_datasets if dataset["active"])
+                inactive_remaining = len(remaining_datasets) - active_remaining
+                if active_remaining and inactive_remaining:
+                    st.sidebar.caption(f"• ... and {len(remaining_datasets)} more ({active_remaining} active, {inactive_remaining} inactive)")
+                elif active_remaining:
+                    st.sidebar.caption(f"• ... and {active_remaining} more (all active)")
+                elif inactive_remaining:
+                    st.sidebar.caption(f"• ... and {inactive_remaining} more (all inactive)")
+                else:
+                    st.sidebar.caption(f"• ... and {len(remaining_datasets)} more")
+        
+        # Show active sources status if filtering is active
+        if document_metadata or tabular_metadata:
+            # Add spacing after the lists
+            st.sidebar.markdown("<br>", unsafe_allow_html=True)
+            
+            active_docs = sum(1 for doc_data in document_metadata.values() if doc_data.get("active", True)) if document_metadata else 0
+            total_docs = len(document_metadata) if document_metadata else 0
+            active_datasets = sum(1 for dataset_data in tabular_metadata.values() if dataset_data.get("active", True)) if tabular_metadata else 0
+            total_datasets = len(tabular_metadata) if tabular_metadata else 0
+            
+            # Show status message if not all sources are active
+            if (total_docs > 0 and active_docs < total_docs) or (total_datasets > 0 and active_datasets < total_datasets):
+                st.sidebar.markdown(
+                    '<div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 4px; padding: 8px; margin: 8px 0;">'
+                    '<p style="color: #1f77b4; font-size: 14px; margin: 0; line-height: 1.2;">'
+                    'ℹ️ Some sources are inactive. Use \'Manage Sources\' to change selections.'
+                    '</p></div>', 
+                    unsafe_allow_html=True
+                )
         
         # Manage Sources button
         if st.sidebar.button("🔧 Manage Sources", key="manage_sources_sidebar", use_container_width=True, help="Open data sources management dialog"):
@@ -631,7 +703,7 @@ def split_document_for_rag(text, chunk_size=1000, chunk_overlap=100):
     # Split the document
     return text_splitter.split_documents([doc])
 
-def create_vector_db_from_text(text, title, api_key, entities=None):
+def create_vector_db_from_text(text, title, api_key, entities=None, document_tags=None, document_category=None):
     """
     Create a vector database from text content.
     
@@ -642,6 +714,8 @@ def create_vector_db_from_text(text, title, api_key, entities=None):
         entities: Optional dictionary containing entity information for reverse anonymization
                  Note: Entity information is stored separately in document metadata,
                  not in the vector database chunks, to ensure it's not exposed to the AI agent
+        document_tags: Optional list of tags for categorizing the document
+        document_category: Optional category for the document (e.g., "legal", "sustainability", "policy")
     """
     # Check if RAG functionality is available
     if not RAG_AVAILABLE:
@@ -714,12 +788,23 @@ def create_vector_db_from_text(text, title, api_key, entities=None):
         # Split document into chunks
         docs = split_document_for_rag(text)
         
-        # Prepare documents for ChromaDB
+        # Auto-detect document category if not provided
+        if document_category is None:
+            document_category = auto_detect_document_category(title, text, entities)
+        
+        # Auto-generate tags if not provided
+        if document_tags is None:
+            document_tags = auto_generate_document_tags(title, text, entities)
+        
+        # Prepare documents for ChromaDB with enhanced metadata
         texts = [doc.page_content for doc in docs]
         metadatas = [
             {
                 'source': title,
-                'chunk_id': i
+                'chunk_id': i,
+                'document_hash': document_hash,
+                'document_category': document_category,
+                'document_tags': ','.join(document_tags) if document_tags else ''
             } 
             for i in range(len(texts))
         ]
@@ -731,11 +816,15 @@ def create_vector_db_from_text(text, title, api_key, entities=None):
             ids=[f"{document_hash}_{i}" for i in range(len(texts))]
         )
         
-        # Add metadata for the new document
+        # Add enhanced metadata for the new document
         document_metadata[document_hash] = {
             'title': title,
             'length': len(text),
-            'chunks': len(texts)
+            'chunks': len(texts),
+            'category': document_category,
+            'tags': document_tags or [],
+            'timestamp': time.time(),
+            'active': True
         }
         
         # Store entity information if provided
@@ -748,6 +837,105 @@ def create_vector_db_from_text(text, title, api_key, entities=None):
         save_document_metadata(persist_directory, document_metadata)
     
     return collection
+
+def auto_detect_document_category(title, text, entities=None):
+    """
+    Automatically detect document category based on title, content, and entities.
+    
+    Args:
+        title: Document title
+        text: Document content
+        entities: Entity information
+    
+    Returns:
+        str: Detected category
+    """
+    title_lower = title.lower()
+    text_sample = text[:2000].lower()  # First 2000 characters for analysis
+    
+    # Legal/Governance documents
+    if any(keyword in title_lower for keyword in ['charter', 'constitution', 'treaty', 'agreement', 'convention', 'protocol']):
+        return 'legal_governance'
+    
+    # Sustainability/Development documents
+    if any(keyword in title_lower for keyword in ['sustainable', 'development', 'sdg', 'climate', 'environment']):
+        return 'sustainability_development'
+    
+    # Policy documents
+    if any(keyword in title_lower for keyword in ['policy', 'framework', 'strategy', 'plan', 'roadmap']):
+        return 'policy_strategy'
+    
+    # International relations
+    if any(keyword in title_lower for keyword in ['pact', 'alliance', 'cooperation', 'partnership', 'diplomatic']):
+        return 'international_relations'
+    
+    # Check content for category hints
+    if any(keyword in text_sample for keyword in ['article', 'shall', 'hereby', 'whereas', 'pursuant']):
+        return 'legal_governance'
+    
+    if any(keyword in text_sample for keyword in ['sustainability', 'climate change', 'renewable', 'carbon', 'emissions']):
+        return 'sustainability_development'
+    
+    # Check entities for category hints
+    if entities and isinstance(entities, dict):
+        categories = entities.get('Category', [])
+        org_count = categories.count('ORG')
+        gpe_count = categories.count('GPE')
+        
+        if org_count > 10 and gpe_count > 5:
+            return 'international_relations'
+    
+    return 'general_document'
+
+def auto_generate_document_tags(title, text, entities=None):
+    """
+    Automatically generate tags for a document based on its content.
+    
+    Args:
+        title: Document title
+        text: Document content
+        entities: Entity information
+    
+    Returns:
+        list: Generated tags
+    """
+    tags = []
+    title_lower = title.lower()
+    text_sample = text[:2000].lower()
+    
+    # Title-based tags
+    title_keywords = ['un', 'united nations', 'charter', 'pact', 'sustainable', 'development', 'goals', 'sdg', 'climate', 'governance', 'international']
+    for keyword in title_keywords:
+        if keyword in title_lower:
+            tags.append(keyword.replace(' ', '_'))
+    
+    # Content-based tags
+    content_patterns = {
+        'multilateral': ['multilateral', 'international cooperation', 'member states'],
+        'environmental': ['environmental', 'climate', 'sustainability', 'green'],
+        'human_rights': ['human rights', 'fundamental freedoms', 'dignity'],
+        'economic': ['economic', 'trade', 'development', 'finance'],
+        'security': ['security', 'peace', 'conflict', 'peacekeeping'],
+        'technology': ['technology', 'digital', 'innovation', 'artificial intelligence'],
+        'governance': ['governance', 'democracy', 'rule of law', 'transparency']
+    }
+    
+    for tag, patterns in content_patterns.items():
+        if any(pattern in text_sample for pattern in patterns):
+            tags.append(tag)
+    
+    # Entity-based tags
+    if entities and isinstance(entities, dict):
+        categories = entities.get('Category', [])
+        if categories.count('ORG') > 10:
+            tags.append('organization_focused')
+        if categories.count('GPE') > 5:
+            tags.append('geopolitical')
+        if categories.count('PERSON') > 3:
+            tags.append('person_focused')
+    
+    # Remove duplicates and return
+    return list(set(tags))
 
 def query_vector_db(collection, query, n_results=5, selected_doc_sources=None):
     """
@@ -1341,7 +1529,8 @@ def save_tabular_metadata(title, df, file_hash):
         "columns": list(df.columns),
         "shape": df.shape,
         "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-        "timestamp": time.time()
+        "timestamp": time.time(),
+        "active": True  # New datasets are active by default
     }
     
     # Save updated metadata
@@ -1538,13 +1727,15 @@ except ImportError:
     st.warning("Tool-calling dependencies are missing. Please install langchain-experimental and langchain-openai.")
 
 @tool
-def search_documents(query: str, doc_sources: Optional[str] = None) -> str:
+def search_documents(query: str, doc_sources: Optional[str] = None, category_filter: Optional[str] = None, tag_filter: Optional[str] = None) -> str:
     """
     Search through uploaded text documents using semantic similarity.
     
     Args:
         query: The search query to find relevant information in documents
         doc_sources: Optional comma-separated list of document titles to search in specific documents
+        category_filter: Optional category to filter documents (e.g., 'legal_governance', 'sustainability_development')
+        tag_filter: Optional tag to filter documents (e.g., 'un', 'climate', 'governance')
     
     Returns:
         Relevant text passages from documents with source information
@@ -1553,12 +1744,21 @@ def search_documents(query: str, doc_sources: Optional[str] = None) -> str:
         return "No text documents are currently loaded in the database."
     
     try:
-        # Parse doc_sources if provided
+        # Parse doc_sources if provided, otherwise use selected checkboxes
         selected_sources = None
         if doc_sources:
             # Convert document titles to hashes if needed
             # For now, use the existing selected_doc_sources
             selected_sources = st.session_state.get("selected_doc_sources", [])
+        else:
+            # Use the checkbox selections from Data Sources Management
+            selected_sources = st.session_state.get("selected_doc_sources", [])
+            # If no specific selection exists, use all available documents
+            if not selected_sources:
+                persist_directory = './chroma_db'
+                document_metadata = load_document_metadata(persist_directory)
+                if document_metadata:
+                    selected_sources = list(document_metadata.keys())
         
         # Query the vector database
         context_docs, context_metadatas = query_vector_db(
@@ -1569,10 +1769,37 @@ def search_documents(query: str, doc_sources: Optional[str] = None) -> str:
         )
         
         if not context_docs:
-            return f"No relevant information found in documents for query: '{query}'"
+            # Check if filtering might be the issue
+            if selected_sources:
+                persist_directory = './chroma_db'
+                document_metadata = load_document_metadata(persist_directory)
+                total_docs = len(document_metadata) if document_metadata else 0
+                active_docs = len(selected_sources)
+                
+                if active_docs < total_docs:
+                    return f"No relevant information found in the {active_docs} selected document(s) for query: '{query}'. Note: {total_docs - active_docs} document(s) are currently inactive and not being searched. You can change document selection in Data Sources Management."
+                else:
+                    return f"No relevant information found in documents for query: '{query}'"
+            else:
+                return f"No relevant information found in documents for query: '{query}'"
         
         # Format results for the LLM
-        result = f"Found {len(context_docs)} relevant passages for '{query}':\n\n"
+        result = f"Found {len(context_docs)} relevant passages for '{query}'"
+        
+        # Add filtering information if applicable
+        if selected_sources:
+            persist_directory = './chroma_db'
+            document_metadata = load_document_metadata(persist_directory)
+            total_docs = len(document_metadata) if document_metadata else 0
+            active_docs = len(selected_sources)
+            
+            if active_docs < total_docs:
+                result += f" (searched {active_docs} of {total_docs} available documents)"
+            elif active_docs == total_docs:
+                result += f" (searched all {total_docs} documents)"
+        
+        result += ":\n\n"
+        
         for i, (doc, metadata) in enumerate(zip(context_docs, context_metadatas)):
             source = metadata.get('source', 'Unknown Document')
             result += f"[Source: {source}]\n{doc}\n\n"
@@ -1594,11 +1821,18 @@ def analyze_tabular_data(query: str, dataset_name: Optional[str] = None) -> str:
     Returns:
         Analysis results including statistics, trends, or specific data points
     """
-    # Get available datasets from session state
-    available_datasets = st.session_state.get("tabular_datasets", {})
+    # Get selected datasets based on checkbox selection
+    available_datasets = get_selected_tabular_datasets()
     
     if not available_datasets:
-        return "No tabular datasets are currently loaded. Please upload a CSV or Excel file first."
+        # Check if there are datasets but none selected
+        all_datasets = st.session_state.get("tabular_datasets", {})
+        if all_datasets:
+            selected_count = len(st.session_state.get("selected_datasets", []))
+            total_count = len(all_datasets)
+            return f"No datasets are currently selected for analysis. {total_count - selected_count} of {total_count} datasets are inactive. You can change dataset selection in Data Sources Management."
+        else:
+            return "No tabular datasets are currently loaded. Please upload a CSV or Excel file first."
     
     try:
         # Select dataset
@@ -1631,7 +1865,21 @@ def analyze_tabular_data(query: str, dataset_name: Optional[str] = None) -> str:
         
         # Execute the query
         result = agent.invoke(query)
-        return f"{dataset_info}\n\nQuery: {query}\n\nResult:\n{result['output']}"
+        
+        # Add filtering information
+        result_text = f"{dataset_info}"
+        
+        # Check if filtering is active
+        all_datasets = st.session_state.get("tabular_datasets", {})
+        selected_datasets = get_selected_tabular_datasets()
+        
+        if len(selected_datasets) < len(all_datasets):
+            result_text += f" (using {len(selected_datasets)} of {len(all_datasets)} available datasets)"
+        elif len(selected_datasets) == len(all_datasets) and len(all_datasets) > 1:
+            result_text += f" (using all {len(all_datasets)} datasets)"
+        
+        result_text += f"\n\nQuery: {query}\n\nResult:\n{result['output']}"
+        return result_text
         
     except Exception as e:
         return f"Error analyzing data: {str(e)}"
@@ -1696,10 +1944,17 @@ def get_data_summary(dataset_name: Optional[str] = None) -> str:
     Returns:
         Summary information about the dataset(s) including columns, data types, and basic statistics
     """
-    available_datasets = st.session_state.get("tabular_datasets", {})
+    available_datasets = get_selected_tabular_datasets()
     
     if not available_datasets:
-        return "No tabular datasets are currently loaded."
+        # Check if there are datasets but none selected
+        all_datasets = st.session_state.get("tabular_datasets", {})
+        if all_datasets:
+            selected_count = len(st.session_state.get("selected_datasets", []))
+            total_count = len(all_datasets)
+            return f"No datasets are currently selected for summary. {total_count - selected_count} of {total_count} datasets are inactive. You can change dataset selection in Data Sources Management."
+        else:
+            return "No tabular datasets are currently loaded."
     
     try:
         if dataset_name and dataset_name in available_datasets:
@@ -1741,10 +1996,17 @@ def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_
     if not VISUALIZATION_AVAILABLE:
         return "Visualization libraries are not available. Please install matplotlib, seaborn, and plotly."
     
-    available_datasets = st.session_state.get("tabular_datasets", {})
+    available_datasets = get_selected_tabular_datasets()
     
     if not available_datasets:
-        return "No tabular datasets are currently loaded."
+        # Check if there are datasets but none selected
+        all_datasets = st.session_state.get("tabular_datasets", {})
+        if all_datasets:
+            selected_count = len(st.session_state.get("selected_datasets", []))
+            total_count = len(all_datasets)
+            return f"No datasets are currently selected for visualization. {total_count - selected_count} of {total_count} datasets are inactive. You can change dataset selection in Data Sources Management."
+        else:
+            return "No tabular datasets are currently loaded."
     
     try:
         import pandas as pd
@@ -2133,6 +2395,8 @@ def create_unified_agent():
     
     # Define all available tools
     tools = [
+        get_document_sources,
+        get_active_sources_summary,
         search_documents,
         analyze_tabular_data,
         cross_reference_analysis,
@@ -2149,6 +2413,7 @@ def create_unified_agent():
         ("system", f"""You are an intelligent assistant that can analyze both text documents and tabular data.
 
 Available capabilities:
+- get_document_sources: Get detailed information about all available text documents with titles and metadata
 - search_documents: Find information in uploaded text documents (PDFs, DOCX, transcripts, etc.)
 - analyze_tabular_data: Perform analysis on CSV/Excel data using pandas operations
 - cross_reference_analysis: Find connections between documents and data
@@ -2177,9 +2442,10 @@ VISUALIZATION BEST PRACTICES:
 - When creating multiple charts, make each chart call separately to ensure all charts are displayed
 
 TOOL SELECTION STRATEGY:
+- Document availability questions → get_document_sources (first to understand what's available)
 - Chart/visualization requests → create_visualization (direct, multiple calls for multiple charts)
 - Data analysis questions → analyze_tabular_data (direct)
-- Document content questions → search_documents (direct)
+- Document content questions → search_documents (direct, but use get_document_sources first if user needs overview)
 - Questions needing both → cross_reference_analysis (single call)
 - Data structure questions → get_data_summary (only when necessary)
 
@@ -2647,7 +2913,8 @@ def show_data_sources():
                 # Update metadata with active status
                 for file_hash, dataset_data in tabular_metadata.items():
                     dataset_data['active'] = dataset_data['title'] in selected_datasets
-                # Note: We would need to add a save function for tabular metadata if we want to persist active status
+                # Save the updated metadata
+                save_tabular_metadata_active_status(tabular_metadata)
                 
                 # Add Clear All Datasets button
                 if st.button("Clear All Datasets", type="secondary", use_container_width=True):
@@ -2688,7 +2955,50 @@ def show_data_sources():
     if show_insights:
         st.subheader("📋 Content Analysis Summary")
         
-        # Document insights
+        # Persistent Document insights
+        persist_directory = './chroma_db'
+        document_metadata = load_document_metadata(persist_directory)
+        if document_metadata:
+            with st.expander("📚 Persistent Document Sources", expanded=True):
+                st.markdown(f"**{len(document_metadata)} document(s) in vector database:**")
+                
+                for doc_hash, doc_data in document_metadata.items():
+                    title = doc_data.get('title', 'Unknown Document')
+                    chunks = doc_data.get('chunks', 0)
+                    length = doc_data.get('length', 0)
+                    active = doc_data.get('active', True)
+                    entities = doc_data.get('entities', {})
+                    
+                    status_icon = "✅" if active else "⏸️"
+                    st.write(f"{status_icon} **{title}**")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Word Count", f"{length:,}")
+                    with col2:
+                        st.metric("Text Chunks", chunks)
+                    with col3:
+                        entity_count = len(entities.get('Text', [])) if entities else 0
+                        st.metric("Entities", entity_count)
+                    with col4:
+                        status = "Active" if active else "Inactive"
+                        st.metric("Status", status)
+                    
+                    # Entity breakdown for persistent documents
+                    if entities and 'Category' in entities:
+                        entity_types = entities['Category']
+                        if entity_types:
+                            st.write("**Entity Types:**")
+                            entity_counts = {}
+                            for entity_type in entity_types:
+                                entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+                            
+                            for entity_type, count in entity_counts.items():
+                                st.write(f"• {entity_type}: {count} instances")
+                    
+                    st.markdown("---")
+        
+        # Current session document insights
         if "saved_anonymisation" in st.session_state:
             document_content = st.session_state["saved_anonymisation"].get("Data", "")
             document_entities = st.session_state["saved_anonymisation"].get("Entities", {})
@@ -3240,4 +3550,248 @@ Create a unified analysis that leverages both data types."""
     return templates
 
 # ===== END LOCAL ANALYSIS FUNCTIONS =====
+
+@tool
+def get_document_sources() -> str:
+    """
+    Get detailed information about all available document sources in the system.
+    
+    Returns:
+        Detailed list of available documents with titles, summaries, and metadata
+    """
+    # Check if vector database is available
+    if not hasattr(st.session_state, 'vector_db') or st.session_state.vector_db is None:
+        return "No text documents are currently loaded in the database."
+    
+    try:
+        # Load document metadata
+        persist_directory = './chroma_db'
+        document_metadata = load_document_metadata(persist_directory)
+        
+        if not document_metadata:
+            return "No documents found in the database."
+        
+        # Count active vs total documents
+        active_count = sum(1 for doc_data in document_metadata.values() if doc_data.get("active", True))
+        total_count = len(document_metadata)
+        
+        # Create detailed document listing with status summary
+        if active_count == total_count:
+            result = f"Document Sources ({total_count} documents - all active):\n\n"
+        else:
+            result = f"Document Sources ({active_count} active, {total_count} total):\n\n"
+        
+        # Sort documents by timestamp (newest first)
+        doc_list = []
+        for doc_hash, doc_data in document_metadata.items():
+            doc_list.append({
+                "hash": doc_hash,
+                "title": doc_data.get("title", "Unknown Document"),
+                "length": doc_data.get("length", 0),
+                "chunks": doc_data.get("chunks", 0),
+                "timestamp": doc_data.get("timestamp", 0),
+                "active": doc_data.get("active", True),
+                "entities": doc_data.get("entities", {})
+            })
+        
+        doc_list.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        for i, doc in enumerate(doc_list, 1):
+            result += f"{i}. **{doc['title']}**\n"
+            result += f"   - Length: {doc['length']:,} characters\n"
+            result += f"   - Chunks: {doc['chunks']} text segments\n"
+            result += f"   - Status: {'Active' if doc['active'] else 'Inactive'}\n"
+            
+            # Add entity information if available
+            entities = doc.get('entities', {})
+            if entities and 'Category' in entities:
+                entity_types = set(entities['Category'])
+                entity_summary = []
+                for entity_type in ['PERSON', 'ORG', 'GPE', 'DATE', 'TIME']:
+                    count = entities['Category'].count(entity_type)
+                    if count > 0:
+                        entity_summary.append(f"{entity_type}: {count}")
+                
+                if entity_summary:
+                    result += f"   - Key Entities: {', '.join(entity_summary)}\n"
+            
+            # Add content hint based on title and entities
+            content_hints = []
+            title_lower = doc['title'].lower()
+            if 'sustainable' in title_lower or 'development' in title_lower:
+                content_hints.append("sustainability/development topics")
+            if 'charter' in title_lower or 'constitution' in title_lower:
+                content_hints.append("governance/legal framework")
+            if 'pact' in title_lower or 'agreement' in title_lower:
+                content_hints.append("international agreements")
+            
+            if content_hints:
+                result += f"   - Content Type: {', '.join(content_hints)}\n"
+            
+            result += "\n"
+        
+        result += "💡 **Usage Tips:**\n"
+        result += "- Use search_documents() to find specific information within these documents\n"
+        result += "- Mention document titles in your queries for more targeted searches\n"
+        result += "- All documents are anonymized for privacy protection\n"
+        
+        return result
+        
+    except Exception as e:
+        return f"Error retrieving document sources: {str(e)}"
+
+@tool
+def get_active_sources_summary() -> str:
+    """
+    Get a summary of currently ACTIVE/SELECTED data sources that will be used for analysis.
+    
+    Returns:
+        Summary of active documents and datasets that the agent can currently access
+    """
+    summary_parts = []
+    
+    # Check active documents
+    if hasattr(st.session_state, 'vector_db') and st.session_state.vector_db is not None:
+        try:
+            persist_directory = './chroma_db'
+            document_metadata = load_document_metadata(persist_directory)
+            
+            if document_metadata:
+                active_docs = [doc_data for doc_data in document_metadata.values() if doc_data.get("active", True)]
+                total_docs = len(document_metadata)
+                
+                if active_docs:
+                    active_titles = [doc.get("title", "Unknown") for doc in active_docs]
+                    summary_parts.append(f"📄 **Active Documents ({len(active_docs)} of {total_docs} available):**")
+                    for i, title in enumerate(active_titles, 1):
+                        summary_parts.append(f"   {i}. {title}")
+                else:
+                    summary_parts.append(f"📄 **Documents:** 0 active ({total_docs} available but all inactive)")
+            else:
+                summary_parts.append("📄 **Documents:** None available")
+        except Exception:
+            summary_parts.append("📄 **Documents:** Error checking document status")
+    else:
+        summary_parts.append("📄 **Documents:** None loaded")
+    
+    # Check active tabular datasets
+    available_datasets = get_selected_tabular_datasets()
+    all_datasets = st.session_state.get("tabular_datasets", {})
+    
+    if available_datasets:
+        dataset_names = list(available_datasets.keys())
+        total_datasets = len(all_datasets)
+        summary_parts.append(f"📊 **Active Datasets ({len(available_datasets)} of {total_datasets} available):**")
+        for i, name in enumerate(dataset_names, 1):
+            df = available_datasets[name]
+            summary_parts.append(f"   {i}. {name} ({df.shape[0]} rows, {df.shape[1]} columns)")
+        
+        # Add debug info to help troubleshoot
+        tabular_metadata = get_tabular_metadata()
+        if tabular_metadata:
+            metadata_active_count = sum(1 for data in tabular_metadata.values() if data.get("active", True))
+            if len(available_datasets) != metadata_active_count:
+                summary_parts.append(f"   ⚠️ Debug: Metadata shows {metadata_active_count} active, but filtered to {len(available_datasets)}")
+    elif all_datasets:
+        total_datasets = len(all_datasets)
+        summary_parts.append(f"📊 **Datasets:** 0 active ({total_datasets} available but all inactive)")
+        
+        # Show metadata status for debugging
+        tabular_metadata = get_tabular_metadata()
+        if tabular_metadata:
+            metadata_active_count = sum(1 for data in tabular_metadata.values() if data.get("active", True))
+            summary_parts.append(f"   🔍 Debug: Metadata shows {metadata_active_count} datasets as active")
+    else:
+        summary_parts.append("📊 **Datasets:** None loaded")
+    
+    if not summary_parts:
+        return "No data sources are currently available for analysis."
+    
+    result = "**ACTIVE DATA SOURCES SUMMARY**\n\n" + "\n".join(summary_parts)
+    result += "\n\n💡 **Note:** Only active/selected sources will be used for analysis. You can change selections in Data Sources Management."
+    
+    return result
+
+def get_selected_tabular_datasets():
+    """
+    Get only the selected tabular datasets based on checkbox selection in Data Sources Management.
+    
+    Returns:
+        dict: Dictionary of selected datasets {name: dataframe}
+    """
+    # Get all available datasets
+    all_datasets = st.session_state.get("tabular_datasets", {})
+    
+    if not all_datasets:
+        return {}
+    
+    # Get selected dataset names from checkboxes
+    selected_dataset_names = st.session_state.get("selected_datasets", [])
+    
+    # Check if we have metadata to determine the actual active status
+    tabular_metadata = get_tabular_metadata()
+    
+    # If we have metadata with active status information, use that
+    if tabular_metadata:
+        filtered_datasets = {}
+        for file_hash, dataset_data in tabular_metadata.items():
+            dataset_title = dataset_data.get("title", "Unknown")
+            is_active = dataset_data.get("active", True)
+            
+            # Only include if marked as active in metadata AND exists in session state
+            if is_active and dataset_title in all_datasets:
+                filtered_datasets[dataset_title] = all_datasets[dataset_title]
+        
+        return filtered_datasets
+    
+    # Fallback: If no metadata exists, use session state selection
+    # If no selection exists, return all datasets (default behavior for new installations)
+    if not selected_dataset_names:
+        return all_datasets
+    
+    # Filter datasets based on selection
+    filtered_datasets = {}
+    for dataset_name in selected_dataset_names:
+        if dataset_name in all_datasets:
+            filtered_datasets[dataset_name] = all_datasets[dataset_name]
+    
+    return filtered_datasets
+
+def save_tabular_metadata_active_status(metadata):
+    """
+    Save tabular metadata with updated active status.
+    
+    Args:
+        metadata: Dictionary of tabular metadata to save
+    """
+    try:
+        metadata_file = "./data_storage/tabular_metadata.json"
+        
+        # Ensure directory exists
+        os.makedirs("./data_storage", exist_ok=True)
+        
+        # Save metadata
+        with open(metadata_file, 'w') as f:
+            # Convert any numpy types to native Python types for JSON serialization
+            serializable_metadata = {}
+            for key, value in metadata.items():
+                serializable_value = {}
+                for sub_key, sub_value in value.items():
+                    if isinstance(sub_value, (list, tuple)):
+                        # Convert any numpy types in lists
+                        serializable_value[sub_key] = [
+                            item.tolist() if hasattr(item, 'tolist') else item 
+                            for item in sub_value
+                        ]
+                    elif hasattr(sub_value, 'tolist'):
+                        # Convert numpy arrays
+                        serializable_value[sub_key] = sub_value.tolist()
+                    else:
+                        serializable_value[sub_key] = sub_value
+                serializable_metadata[key] = serializable_value
+            
+            json.dump(serializable_metadata, f, indent=2)
+            
+    except Exception as e:
+        st.warning(f"Could not save tabular metadata: {e}")
 
