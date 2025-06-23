@@ -217,6 +217,59 @@ def process_excel_file(file_content, file_hash):
 
 st.markdown("<p>Welcome to this set of tools! Upload your document, anonymize content, ask ChatGPT for insights, and revert anonymization when needed.</p>",unsafe_allow_html=True)
 
+# Data Sources Status Info - Compact Version
+def show_data_sources_status():
+    """Show current data sources status with active/inactive counts in one line"""
+    # Check for documents
+    persist_directory = './chroma_db'
+    document_metadata = None
+    if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
+        try:
+            document_metadata = lib.load_document_metadata(persist_directory)
+        except:
+            document_metadata = None
+    
+    # Check for tabular datasets
+    tabular_metadata = None
+    try:
+        tabular_metadata = lib.get_tabular_metadata()
+    except:
+        tabular_metadata = None
+    
+    # If we have any data sources, show compact status
+    if document_metadata or tabular_metadata:
+        sources_info = []
+        
+        if document_metadata:
+            active_docs = sum(1 for doc_data in document_metadata.values() if doc_data.get("active", True))
+            total_docs = len(document_metadata)
+            
+            if active_docs == total_docs:
+                sources_info.append(f"{total_docs} text document(s)")
+            else:
+                sources_info.append(f"{active_docs}/{total_docs} text document(s)")
+        
+        if tabular_metadata:
+            active_datasets = sum(1 for dataset_data in tabular_metadata.values() if dataset_data.get("active", True))
+            total_datasets = len(tabular_metadata)
+            
+            if active_datasets == total_datasets:
+                sources_info.append(f"{total_datasets} tabular dataset(s)")
+            else:
+                sources_info.append(f"{active_datasets}/{total_datasets} tabular dataset(s)")
+        
+        if sources_info:
+            sources_text = " and ".join(sources_info)
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.info(f"📊 You have {sources_text} available for analysis.")
+            with col2:
+                if st.button("🔧 Manage", use_container_width=True, help="Configure data sources"):
+                    lib.show_data_sources()
+
+# Show data sources status
+show_data_sources_status()
+
 st.header("Upload New Source")
 
 st.markdown("<p>Upload your file to begin processing. Choose from meeting transcripts, text documents, or data files.</p>", unsafe_allow_html=True)

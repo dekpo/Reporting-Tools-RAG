@@ -34,16 +34,43 @@ if "gpt_api_key" not in st.session_state:
 
     st.markdown("<p>Ask ChatGPT to answer questions about your anonymized content using advanced retrieval techniques.</p>",unsafe_allow_html=True)
 
-    # Check if we have a persistent ChromaDB to load
+    # Check data sources and show unified status message
     persist_directory = './chroma_db'
+    document_metadata = None
     if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
         document_metadata = lib.load_document_metadata(persist_directory)
-        if document_metadata:
-            st.info(f"Found {len(document_metadata)} document(s) in storage. After submitting your API key, you'll be able to access them.")
     
-    # Check for tabular datasets as well
+    tabular_metadata = lib.get_tabular_metadata()
+    
+    # Create unified message if we have any data sources
+    if document_metadata or tabular_metadata:
+        sources_info = []
+        
+        if document_metadata:
+            active_docs = sum(1 for doc_data in document_metadata.values() if doc_data.get("active", True))
+            total_docs = len(document_metadata)
+            
+            if active_docs == total_docs:
+                sources_info.append(f"{total_docs} text document(s)")
+            else:
+                sources_info.append(f"{active_docs}/{total_docs} text document(s)")
+        
+        if tabular_metadata:
+            active_datasets = sum(1 for dataset_data in tabular_metadata.values() if dataset_data.get("active", True))
+            total_datasets = len(tabular_metadata)
+            
+            if active_datasets == total_datasets:
+                sources_info.append(f"{total_datasets} tabular dataset(s)")
+            else:
+                sources_info.append(f"{active_datasets}/{total_datasets} tabular dataset(s)")
+        
+        if sources_info:
+            sources_text = " and ".join(sources_info)
+            st.info(f"Found {sources_text} in storage. After submitting your API key, you'll be able to access them.")
+    
+    # Check for existing data sources for the tip message
     has_documents = os.path.exists(persist_directory) and os.path.isdir(persist_directory) and lib.load_document_metadata(persist_directory)
-    has_datasets = os.path.exists('./tabular_data') and os.path.isdir('./tabular_data') and len([f for f in os.listdir('./tabular_data') if f.endswith(('.csv', '.xlsx', '.xls'))]) > 0
+    has_datasets = tabular_metadata is not None and len(tabular_metadata) > 0
     
     # Show message and button if no data sources are available
     if not has_documents and not has_datasets:
@@ -492,49 +519,44 @@ else:
         st.warning("No data sources loaded. Please upload documents or datasets to begin analysis.")
         st.page_link(page="pages/00_home.py", label="Go To Home Page", icon=":material/home:", use_container_width=True)
     else:
-        # Show what's available in a compact info box
+        # Show what's available in a compact info box with active/inactive status
         available_sources = []
         if has_documents:
-            num_docs = len(st.session_state.get('selected_doc_sources', []))
-            
-            # Fallback: If selected_doc_sources is empty but we have documents, 
-            # try to get count from the actual document metadata
-            if num_docs == 0 and "vector_db" in st.session_state and st.session_state.vector_db is not None:
-                persist_directory = './chroma_db'
-                document_metadata = lib.load_document_metadata(persist_directory)
-                if document_metadata:
-                    num_docs = len(document_metadata)
-                    # Also update selected_doc_sources for consistency
-                    st.session_state.selected_doc_sources = list(document_metadata.keys())
-                elif "saved_anonymisation" in st.session_state:
-                    # If we have a current document but no persistent storage yet, count it as 1
-                    num_docs = 1
-            
-            available_sources.append(f"{num_docs} text document(s)")
+            # Get document counts from metadata
+            persist_directory = './chroma_db'
+            document_metadata = lib.load_document_metadata(persist_directory)
+            if document_metadata:
+                active_docs = sum(1 for doc_data in document_metadata.values() if doc_data.get("active", True))
+                total_docs = len(document_metadata)
+                
+                if active_docs == total_docs:
+                    available_sources.append(f"{total_docs} text document(s)")
+                else:
+                    available_sources.append(f"{active_docs}/{total_docs} text document(s)")
+            elif "saved_anonymisation" in st.session_state:
+                # If we have a current document but no persistent storage yet, count it as 1
+                available_sources.append("1 text document")
+        
         if has_datasets:
-            num_datasets = len(st.session_state.get('tabular_datasets', {}))
-            
-            # Fallback: If tabular_datasets is empty but we should have datasets,
-            # try to load from persistent storage
-            if num_datasets == 0:
-                try:
-                    persistent_datasets = lib.load_tabular_datasets()
-                    if persistent_datasets:
-                        num_datasets = len(persistent_datasets)
-                        # Also update session state for consistency
-                        if "tabular_datasets" not in st.session_state:
-                            st.session_state.tabular_datasets = {}
-                        st.session_state.tabular_datasets.update(persistent_datasets)
-                except Exception:
-                    # If loading fails, we'll just use the current count
-                    pass
-            
-            available_sources.append(f"{num_datasets} tabular dataset(s)")
+            # Get dataset counts from metadata
+            tabular_metadata = lib.get_tabular_metadata()
+            if tabular_metadata:
+                active_datasets = sum(1 for dataset_data in tabular_metadata.values() if dataset_data.get("active", True))
+                total_datasets = len(tabular_metadata)
+                
+                if active_datasets == total_datasets:
+                    available_sources.append(f"{total_datasets} tabular dataset(s)")
+                else:
+                    available_sources.append(f"{active_datasets}/{total_datasets} tabular dataset(s)")
         
         # Show data sources and context optimization status
         col1, col2 = st.columns([2, 1])
         with col1:
-            st.info(f"📊 Ready to analyze: {', '.join(available_sources)}")
+            if available_sources:
+                sources_text = ', '.join(available_sources)
+                st.info(f"📊 Ready to analyze: {sources_text}")
+            else:
+                st.info("📊 Ready to analyze your data sources")
         
         with col2:
             # Show context optimization status

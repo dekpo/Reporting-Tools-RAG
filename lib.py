@@ -210,9 +210,9 @@ def sidebar():
             total_docs = len(document_metadata)
             
             if active_docs == total_docs:
-                st.sidebar.write(f":page_with_curl: **Document Sources** ({total_docs} active)")
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📄 <strong>Document Sources</strong> ({total_docs} active)</p>', unsafe_allow_html=True)
             else:
-                st.sidebar.write(f":page_with_curl: **Document Sources** ({active_docs}/{total_docs} active)")
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📄 <strong>Document Sources</strong> ({active_docs}/{total_docs} active)</p>', unsafe_allow_html=True)
             
             # Convert metadata to list and sort by timestamp (newest first)
             doc_list = []
@@ -258,9 +258,9 @@ def sidebar():
             total_datasets = len(tabular_metadata)
             
             if active_datasets == total_datasets:
-                st.sidebar.write(f":bar_chart: **Tabular Data Sources** ({total_datasets} active)")
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📊 <strong>Tabular Data Sources</strong> ({total_datasets} active)</p>', unsafe_allow_html=True)
             else:
-                st.sidebar.write(f":bar_chart: **Tabular Data Sources** ({active_datasets}/{total_datasets} active)")
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📊 <strong>Tabular Data Sources</strong> ({active_datasets}/{total_datasets} active)</p>', unsafe_allow_html=True)
             
             # Convert metadata to list and sort by timestamp (newest first)
             dataset_list = []
