@@ -633,8 +633,25 @@ else:
                         fig = lib.recreate_chart_from_config(chart_config)
                         if fig is not None:
                             if st.session_state.get("show_debug", False):
-                                st.write(f"🔧 DEBUG: Chart recreation successful for history display")
-                            st.plotly_chart(fig, use_container_width=True, key=f"history_chart_{chart_id}")
+                                st.write(f"🔧 DEBUG: Chart recreation successful, displaying chart")
+                            
+                            # Anti-aliasing fix: Use specific config to reduce rendering artifacts
+                            config = {
+                                'displayModeBar': True,
+                                'displaylogo': False,
+                                'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d'],
+                                'toImageButtonOptions': {
+                                    'format': 'svg',  # SVG format for crisp rendering
+                                    'filename': 'chart',
+                                    'height': 500,
+                                    'width': 700,
+                                    'scale': 1  # No scaling to prevent artifacts
+                                }
+                            }
+                            st.plotly_chart(fig, use_container_width=True, key=f"current_chart_{chart_id}", config=config)
+                            
+                            # Collect chart IDs for adding to response
+                            chart_ids_for_response = f"\n\n[CHART_ID:{chart_id}]"
                         else:
                             # Show fallback message if chart recreation failed
                             st.warning(f"⚠️ Chart {chart_id} could not be displayed. The chart data may be corrupted or incompatible with the current session.")
@@ -961,7 +978,21 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                                     if fig is not None:
                                         if st.session_state.get("show_debug", False):
                                             st.write(f"🔧 DEBUG: Chart recreation successful, displaying chart")
-                                        st.plotly_chart(fig, use_container_width=True, key=f"current_chart_{chart_id}")
+                                        
+                                        # Anti-aliasing fix: Use specific config to reduce rendering artifacts
+                                        config = {
+                                            'displayModeBar': True,
+                                            'displaylogo': False,
+                                            'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d'],
+                                            'toImageButtonOptions': {
+                                                'format': 'svg',  # SVG format for crisp rendering
+                                                'filename': 'chart',
+                                                'height': 500,
+                                                'width': 700,
+                                                'scale': 1  # No scaling to prevent artifacts
+                                            }
+                                        }
+                                        st.plotly_chart(fig, use_container_width=True, key=f"current_chart_{chart_id}", config=config)
                                         
                                         # Collect chart IDs for adding to response
                                         chart_ids_for_response += f"\n\n[CHART_ID:{chart_id}]"
