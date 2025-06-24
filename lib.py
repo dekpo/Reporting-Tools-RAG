@@ -2382,9 +2382,43 @@ def recreate_chart_from_config(chart_config):
             st.error(error_msg)  # Show error even without debug mode for now
         return None
 
+def get_recent_conversation_context(messages, last_n=6):
+    """
+    Get recent conversation context for the agent, excluding the current message.
+    
+    Args:
+        messages: List of chat messages from st.session_state.messages
+        last_n: Number of recent messages to include (default 6 = 3 exchanges)
+    
+    Returns:
+        List of message tuples for ChatPromptTemplate
+    """
+    if not messages or len(messages) == 0:
+        return []
+    
+    # Get the last N messages, but ensure we have complete user-assistant pairs
+    recent_messages = messages[-last_n:] if len(messages) >= last_n else messages
+    
+    # Convert to ChatPromptTemplate format and filter out chart IDs for cleaner context
+    context_messages = []
+    for msg in recent_messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        
+        # Clean up content by removing chart IDs for cleaner context
+        import re
+        clean_content = re.sub(r'\[CHART_ID:chart_\d+(?:_\d+)?\]', '', content).strip()
+        
+        # Only include non-empty messages
+        if clean_content and role in ["user", "assistant"]:
+            context_messages.append((role, clean_content))
+    
+    return context_messages
+
 def create_unified_agent():
     """
     Create a unified agent that can work with both text documents and tabular data.
+    Now includes recent conversation history for better contextual understanding.
     
     Returns:
         AgentExecutor: The configured agent executor
@@ -2408,8 +2442,14 @@ def create_unified_agent():
     num_documents = len(st.session_state.get('selected_doc_sources', []))
     num_datasets = len(st.session_state.get('tabular_datasets', {}))
     
-    # Create custom prompt that understands the available data types
-    prompt = ChatPromptTemplate.from_messages([
+    # Get recent conversation context for better continuity
+    conversation_context = get_recent_conversation_context(
+        st.session_state.get('messages', []), 
+        last_n=6  # Include last 6 messages (3 exchanges) for context
+    )
+    
+    # Build the prompt messages list
+    prompt_messages = [
         ("system", f"""You are an intelligent assistant that can analyze both text documents and tabular data.
 
 Available capabilities:
@@ -2423,6 +2463,13 @@ Available capabilities:
 Current session contains:
 - Text Documents: {num_documents} documents available for search
 - Tabular Datasets: {num_datasets} datasets available for analysis
+
+CONVERSATION CONTINUITY:
+You have access to recent conversation history above. Use this context to:
+- Understand references like "that document", "the previous analysis", "add takeaways"
+- Build upon previous responses when users ask follow-up questions
+- Maintain continuity when users ask for additions or modifications to previous work
+- Reference specific results, charts, or findings from earlier in the conversation
 
 CRITICAL EFFICIENCY GUIDELINES:
 1. MINIMIZE tool calls - aim for 1-3 tool calls maximum per response
@@ -2463,10 +2510,22 @@ When users ask questions:
 4. Always cite your sources and be specific about which documents or datasets you're referencing
 5. If you hit iteration limits, summarize what you've found so far and suggest the user ask more specific questions
 6. Use clear, text-only formatting - no visual elements or image references in your text responses
-"""),
+7. USE CONVERSATION HISTORY to understand context and provide relevant follow-up responses
+""")
+    ]
+    
+    # Add conversation context if available
+    if conversation_context:
+        prompt_messages.extend(conversation_context)
+    
+    # Add the current input and agent scratchpad
+    prompt_messages.extend([
         ("user", "{input}"),
         ("assistant", "{agent_scratchpad}")
     ])
+    
+    # Create the prompt template with conversation history
+    prompt = ChatPromptTemplate.from_messages(prompt_messages)
     
     # Create the LLM
     llm = ChatOpenAI(
