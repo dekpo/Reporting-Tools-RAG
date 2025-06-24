@@ -1979,7 +1979,7 @@ def get_data_summary(dataset_name: Optional[str] = None) -> str:
         return f"Error getting data summary: {str(e)}"
 
 @tool
-def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_column: Optional[str] = None, y_column: Optional[str] = None, title: Optional[str] = None) -> str:
+def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_column: Optional[str] = None, y_column: Optional[str] = None, title: Optional[str] = None, use_different_colors: Optional[bool] = True) -> str:
     """
     Create charts and visualizations from tabular data.
     
@@ -1989,6 +1989,7 @@ def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_
         x_column: Column name for x-axis (required for most chart types)
         y_column: Column name for y-axis (required for some chart types)
         title: Optional title for the chart
+        use_different_colors: Whether to use different colors for each category (default True for better visualization)
     
     Returns:
         Status message about chart creation
@@ -2172,8 +2173,15 @@ def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_
             "x_column": x_column,
             "y_column": y_column,
             "title": title,
+            "use_different_colors": use_different_colors,
             "data": chart_data.to_dict('records') if hasattr(chart_data, 'to_dict') else chart_data.to_dict(),
-            "columns": list(chart_data.columns) if hasattr(chart_data, 'columns') else None
+            "columns": list(chart_data.columns) if hasattr(chart_data, 'columns') else None,
+            # Add styling configuration to reduce rendering artifacts
+            "styling": {
+                "remove_borders": True,
+                "clean_background": True,
+                "anti_aliasing_fix": True
+            }
         }
         
         # Debug: Log chart config
@@ -2201,8 +2209,14 @@ def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_
         if y_column:
             chart_description += f"**Y-axis:** {y_column}\n"
         chart_description += f"**Chart Type:** {chart_type.title()}\n"
-        chart_description += f"**Data Points:** {len(chart_data)} rows\n\n"
-        chart_description += f"[CHART_ID:{chart_id}]"  # Hidden marker for chart identification
+        chart_description += f"**Data Points:** {len(chart_data)} rows\n"
+        
+        # Add color information for relevant chart types
+        if chart_type.lower() in ["bar", "pie"] and use_different_colors:
+            unique_categories = len(chart_data[x_column].unique()) if x_column in chart_data.columns else 0
+            chart_description += f"**Colors:** Each {x_column} category has a distinct color ({unique_categories} different colors)\n"
+        
+        chart_description += f"\n[CHART_ID:{chart_id}]"  # Hidden marker for chart identification
         
         return chart_description
         
@@ -2243,6 +2257,7 @@ def recreate_chart_from_config(chart_config):
         title = chart_config.get("title", "Chart")
         x_column = chart_config.get("x_column")
         y_column = chart_config.get("y_column")
+        use_different_colors = chart_config.get("use_different_colors", True)
         data = chart_config.get("data")
         columns = chart_config.get("columns")
         
@@ -2345,29 +2360,141 @@ def recreate_chart_from_config(chart_config):
             st.write(f"🔧 DEBUG: About to create {chart_type} chart")
             st.write(f"🔧 DEBUG: Final DataFrame shape: {df.shape}")
         
-        # Recreate the chart based on type
+        # Recreate the chart based on type with improved styling to reduce artifacts
         if chart_type == "bar":
-            fig = px.bar(df, x=x_column, y=y_column, title=title)
+            # Create bar chart with conditional coloring based on user preference
+            if use_different_colors:
+                # Use expanded qualitative color palette for truly different colors
+                # Combine multiple color palettes to ensure enough distinct colors
+                color_palette = (px.colors.qualitative.Set3 + 
+                               px.colors.qualitative.Pastel + 
+                               px.colors.qualitative.Set2)
+                fig = px.bar(df, x=x_column, y=y_column, title=title, 
+                           color=x_column, color_discrete_sequence=color_palette)
+            else:
+                fig = px.bar(df, x=x_column, y=y_column, title=title)
+            
+            # Apply aggressive styling to eliminate horizontal stripes and artifacts
+            fig.update_traces(
+                marker=dict(
+                    line=dict(width=0, color='rgba(0,0,0,0)'),  # Completely remove borders
+                    opacity=1.0,  # Ensure full opacity
+                ),
+                text=None,  # Remove text labels completely
+                texttemplate=None,  # Remove text template
+                selector=dict(type='bar')
+            )
+            
+            # Apply additional anti-aliasing fixes to reduce horizontal stripes
+            fig.update_layout(
+                {
+                    'font': {'size': 12, 'color': 'black'},
+                    'template': 'plotly_white',  # Use clean white template
+                }
+            )
+            
+            # Update layout for cleaner appearance and stripe elimination
+            fig.update_layout(
+                plot_bgcolor='rgba(255,255,255,1)',  # Pure white background
+                paper_bgcolor='rgba(255,255,255,1)',  # Pure white paper background
+                font=dict(size=12, color='black'),  # Consistent font
+                showlegend=False,  # Remove legend to reduce clutter
+                margin=dict(t=80, b=60, l=60, r=60),  # Better margins
+                xaxis=dict(
+                    gridcolor='rgba(240,240,240,0.8)',  # Very light grid lines
+                    showline=True,
+                    linecolor='rgba(0,0,0,0.8)',
+                    linewidth=1,
+                    zeroline=False,
+                    showgrid=True
+                ),
+                yaxis=dict(
+                    gridcolor='rgba(240,240,240,0.8)',  # Very light grid lines
+                    showline=True,
+                    linecolor='rgba(0,0,0,0.8)',
+                    linewidth=1,
+                    zeroline=False,
+                    showgrid=True
+                ),
+                # Additional anti-aliasing and rendering improvements
+                hovermode='closest',
+                dragmode=False
+            )
+            
+            # Force sharp rendering to reduce anti-aliasing artifacts
+            fig.update_layout(
+                {
+                    'plot_bgcolor': 'white',
+                    'paper_bgcolor': 'white'
+                }
+            )
         elif chart_type == "line":
             # For line charts with time series data, aggregate and sort for proper display
             df_aggregated = df.groupby(x_column)[y_column].sum().reset_index()
             df_sorted = df_aggregated.sort_values(by=x_column)
             fig = px.line(df_sorted, x=x_column, y=y_column, title=title)
             # Ensure markers are visible for individual data points
-            fig.update_traces(mode='lines+markers')
+            fig.update_traces(mode='lines+markers', line=dict(width=3))
+            # Apply clean styling
+            fig.update_layout(
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(size=12),
+                margin=dict(t=60, b=60, l=60, r=60),
+                xaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black'),
+                yaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black')
+            )
         elif chart_type == "scatter":
             fig = px.scatter(df, x=x_column, y=y_column, title=title)
+            fig.update_traces(marker=dict(size=8, opacity=0.8))
+            fig.update_layout(
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(size=12),
+                margin=dict(t=60, b=60, l=60, r=60),
+                xaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black'),
+                yaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black')
+            )
         elif chart_type == "histogram":
             fig = px.histogram(df, x=x_column, title=title)
+            fig.update_traces(marker=dict(line=dict(width=0), opacity=0.8))
+            fig.update_layout(
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(size=12),
+                margin=dict(t=60, b=60, l=60, r=60),
+                xaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black'),
+                yaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black')
+            )
         elif chart_type == "pie":
             fig = px.pie(df, values=y_column, names=x_column, title=title)
+            fig.update_traces(textposition='inside', textinfo='percent+label', marker=dict(line=dict(width=1, color='white')))
+            fig.update_layout(
+                paper_bgcolor='white',
+                font=dict(size=12),
+                margin=dict(t=60, b=60, l=60, r=60)
+            )
         elif chart_type == "box":
             if x_column and x_column in df.columns:
                 fig = px.box(df, x=x_column, y=y_column, title=title)
             else:
                 fig = px.box(df, y=y_column, title=title)
+            fig.update_traces(marker=dict(opacity=0.8), line=dict(width=2))
+            fig.update_layout(
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(size=12),
+                margin=dict(t=60, b=60, l=60, r=60),
+                xaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black'),
+                yaxis=dict(gridcolor='rgba(200,200,200,0.5)', showline=True, linecolor='black')
+            )
         elif chart_type == "heatmap":
             fig = px.imshow(df, text_auto=True, title=title)
+            fig.update_layout(
+                paper_bgcolor='white',
+                font=dict(size=12),
+                margin=dict(t=60, b=60, l=60, r=60)
+            )
         else:
             if st.session_state.get("show_debug", False):
                 st.write(f"🔧 DEBUG: Unsupported chart type: {chart_type}")
@@ -2496,6 +2623,8 @@ VISUALIZATION BEST PRACTICES:
 - For distributions: Use histograms for single variables, box plots for distributions by category
 - For correlations: Use scatter plots or heatmaps
 - When creating multiple charts, make each chart call separately to ensure all charts are displayed
+- COLORS: By default, bar charts and pie charts will use different colors for each category automatically (use_different_colors=True is default)
+- When users request "different colors" or "distinct colors" for categories, the system will automatically provide this
 
 TOOL SELECTION STRATEGY:
 - Document availability questions → get_document_sources (first to understand what's available)
