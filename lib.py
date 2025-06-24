@@ -201,7 +201,7 @@ def sidebar():
     
     # Show backup section if we have any persistent sources
     if document_metadata or tabular_metadata:
-        st.sidebar.header(":open_file_folder: Your Source(s)",divider=True)
+        st.sidebar.header(":open_file_folder: Your Sources",divider=True)
         
         # Document Sources
         if document_metadata:
@@ -210,9 +210,9 @@ def sidebar():
             total_docs = len(document_metadata)
             
             if active_docs == total_docs:
-                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📄 <strong>Document Sources</strong> ({total_docs} active)</p>', unsafe_allow_html=True)
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📄 <strong>Document Sources</strong> ({total_docs})</p>', unsafe_allow_html=True)
             else:
-                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📄 <strong>Document Sources</strong> ({active_docs}/{total_docs} active)</p>', unsafe_allow_html=True)
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📄 <strong>Document Sources</strong> ({active_docs}/{total_docs})</p>', unsafe_allow_html=True)
             
             # Convert metadata to list and sort by timestamp (newest first)
             doc_list = []
@@ -258,9 +258,9 @@ def sidebar():
             total_datasets = len(tabular_metadata)
             
             if active_datasets == total_datasets:
-                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📊 <strong>Tabular Data Sources</strong> ({total_datasets} active)</p>', unsafe_allow_html=True)
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📊 <strong>Tabular Data Sources</strong> ({total_datasets})</p>', unsafe_allow_html=True)
             else:
-                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📊 <strong>Tabular Data Sources</strong> ({active_datasets}/{total_datasets} active)</p>', unsafe_allow_html=True)
+                st.sidebar.markdown(f'<p style="color: #262730; font-size: 16px; font-weight: bold; margin: 0 0 4px 0; line-height: 1.2;">📊 <strong>Tabular Data Sources</strong> ({active_datasets}/{total_datasets})</p>', unsafe_allow_html=True)
             
             # Convert metadata to list and sort by timestamp (newest first)
             dataset_list = []
@@ -2075,6 +2075,10 @@ def create_visualization(chart_type: str, dataset_name: Optional[str] = None, x_
             if not x_column or not y_column:
                 return "Line chart requires both x_column and y_column parameters."
             chart_data = df[[x_column, y_column]].copy()
+            # For time series data, aggregate by x-axis (typically years) to avoid sawtooth patterns
+            chart_data = chart_data.groupby(x_column)[y_column].sum().reset_index()
+            # Sort by x-axis for proper time series line display
+            chart_data = chart_data.sort_values(by=x_column)
             
         elif chart_type.lower() == "scatter":
             if not x_column or not y_column:
@@ -2345,7 +2349,12 @@ def recreate_chart_from_config(chart_config):
         if chart_type == "bar":
             fig = px.bar(df, x=x_column, y=y_column, title=title)
         elif chart_type == "line":
-            fig = px.line(df, x=x_column, y=y_column, title=title)
+            # For line charts with time series data, aggregate and sort for proper display
+            df_aggregated = df.groupby(x_column)[y_column].sum().reset_index()
+            df_sorted = df_aggregated.sort_values(by=x_column)
+            fig = px.line(df_sorted, x=x_column, y=y_column, title=title)
+            # Ensure markers are visible for individual data points
+            fig.update_traces(mode='lines+markers')
         elif chart_type == "scatter":
             fig = px.scatter(df, x=x_column, y=y_column, title=title)
         elif chart_type == "histogram":
