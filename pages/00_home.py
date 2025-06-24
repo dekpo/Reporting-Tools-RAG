@@ -260,12 +260,17 @@ def show_data_sources_status():
         
         if sources_info:
             sources_text = " and ".join(sources_info)
-            col1, col2 = st.columns([3, 1])
+            # Full width info message
+            st.info(f"📊 You have {sources_text} available for analysis.")
+            
+            # Two column layout for buttons
+            col1, col2 = st.columns(2)
             with col1:
-                st.info(f"📊 You have {sources_text} available for analysis.")
-            with col2:
                 if st.button("🔧 Manage", use_container_width=True, help="Configure data sources"):
                     lib.show_data_sources()
+            with col2:
+                if st.button("💬 Ask ChatGPT", use_container_width=True, help="Start analyzing with AI", type="primary"):
+                    st.switch_page("./pages/02_chatgpt.py")
 
 # Show data sources status
 show_data_sources_status()
