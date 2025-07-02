@@ -715,7 +715,6 @@ else:
                     st.markdown(f"**{title}**")
                     with st.container(border=True):
                         st.text_area("Template content:", value=template, height=120, key=f"smart_template_{title}", label_visibility="collapsed")
-                st.markdown("---")
         
         # Text Analysis Templates Section with Expander
         with st.expander("📊 Text Analysis Templates", expanded=False):
@@ -764,7 +763,6 @@ Present findings in clear, structured format."""
                 st.markdown(f"**{title}**")
                 with st.container(border=True):
                     st.text_area("Template content:", value=template, height=150, key=f"text_template_{title}", label_visibility="collapsed")
-                st.markdown("---")
         
         # Data Analysis Templates Section with Expander
         with st.expander("📈 Data Analysis Templates", expanded=False):
@@ -815,7 +813,6 @@ Provide clear, actionable recommendations."""
                 st.markdown(f"**{title}**")
                 with st.container(border=True):
                     st.text_area("Template content:", value=template, height=150, key=f"data_template_{title}", label_visibility="collapsed")
-                st.markdown("---")
         
         # Quick Starters Section with Expander
         with st.expander("🚀 Quick Starters", expanded=False):
@@ -839,7 +836,6 @@ Provide clear, actionable recommendations."""
                 st.markdown(f"**{title}**")
                 with st.container(border=True):
                     st.text_area("Template content:", value=template, height=80, key=f"quick_template_{title}", label_visibility="collapsed")
-                st.markdown("---")
         
         # Usage instructions
         st.divider()
