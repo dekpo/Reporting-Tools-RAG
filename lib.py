@@ -77,7 +77,7 @@ from datetime import datetime
 import random
 
 APP_TITLE = "UN CEB - :book: Reporting Tools"
-APP_VERSION = "2.5"
+APP_VERSION = "2.7"
 
 def local_css(file_name):
     with open(file_name) as f:
