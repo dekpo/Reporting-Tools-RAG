@@ -2945,20 +2945,26 @@ def show_data_sources():
                     with col3:
                         if st.button("Remove", key=f"remove_{doc['hash']}"):
                             if st.session_state.get("confirm_delete") == doc['hash']:
-                                # If already confirmed, perform the deletion
-                                with st.spinner(f"Deleting '{doc['title']}'..."):
-                                    success = delete_document_from_vector_db(doc['hash'])
-                                    if success:
-                                        st.rerun()
-                                # Clear confirmation state
+                                # Set deletion in progress state
+                                st.session_state["deleting_in_progress"] = doc['hash']
                                 st.session_state["confirm_delete"] = None
                             else:
-                                # Set confirmation state and show confirmation message
+                                # Set confirmation state
                                 st.session_state["confirm_delete"] = doc['hash']
                     
                     # Show confirmation message below item if needed
                     if st.session_state.get("confirm_delete") == doc['hash']:
                         st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+                    
+                    # Handle deletion with spinner outside column layout
+                    if st.session_state.get("deleting_in_progress") == doc['hash']:
+                        with st.spinner(f"Deleting '{doc['title']}'..."):
+                            success = delete_document_from_vector_db(doc['hash'])
+                            if success:
+                                st.session_state["deleting_in_progress"] = None
+                                st.rerun()
+                            else:
+                                st.session_state["deleting_in_progress"] = None
                 
                 # Store selected documents in session state
                 if "selected_doc_sources" not in st.session_state or st.session_state.selected_doc_sources != selected_docs:
@@ -3088,20 +3094,26 @@ def show_data_sources():
                     with col3:
                         if st.button("Remove", key=f"remove_dataset_{dataset['hash']}"):
                             if st.session_state.get("confirm_delete_dataset") == dataset['hash']:
-                                # If already confirmed, perform the deletion
-                                with st.spinner(f"Deleting '{dataset['title']}'..."):
-                                    success = delete_tabular_dataset(dataset['hash'])
-                                    if success:
-                                        st.rerun()
-                                # Clear confirmation state
+                                # Set deletion in progress state
+                                st.session_state["deleting_dataset_in_progress"] = dataset['hash']
                                 st.session_state["confirm_delete_dataset"] = None
                             else:
-                                # Set confirmation state and show confirmation message
+                                # Set confirmation state
                                 st.session_state["confirm_delete_dataset"] = dataset['hash']
                     
                     # Show confirmation message below item if needed
                     if st.session_state.get("confirm_delete_dataset") == dataset['hash']:
                         st.warning("Click 'Remove' again to confirm deletion.", icon="⚠️")
+                    
+                    # Handle deletion with spinner outside column layout
+                    if st.session_state.get("deleting_dataset_in_progress") == dataset['hash']:
+                        with st.spinner(f"Deleting '{dataset['title']}'..."):
+                            success = delete_tabular_dataset(dataset['hash'])
+                            if success:
+                                st.session_state["deleting_dataset_in_progress"] = None
+                                st.rerun()
+                            else:
+                                st.session_state["deleting_dataset_in_progress"] = None
                 
                 # Store selected datasets in session state
                 if "selected_datasets" not in st.session_state or st.session_state.selected_datasets != selected_datasets:
