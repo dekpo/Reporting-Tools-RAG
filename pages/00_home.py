@@ -607,5 +607,13 @@ else:
         else:
             # Save content for next step
             content_to_save = extracted_text if extracted_text else text_area
-            lib.save_content(title_input, content_to_save, {})
+            
+            # Determine file type and category for intelligent defaults
+            file_type = None
+            file_category = st.session_state.get('file_category', 'document')
+            
+            if 'uploaded_file' in locals() and uploaded_file is not None:
+                file_type = detect_file_type(uploaded_file, file_category)
+            
+            lib.save_content(title_input, content_to_save, {}, file_type, file_category)
             st.switch_page("./pages/01_anonymize.py")

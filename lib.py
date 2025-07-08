@@ -95,13 +95,14 @@ def app_config():
     # Check for cleanup requests at startup
     check_cleanup_requests()
 
-def save_content(title,content,attendees):
+def save_content(title,content,attendees,file_type=None,file_category=None):
     st.session_state["saved_content"] = {
         "Time": current_datetime,
         "Title": title,
         "Data": content,
-        "Attendees": attendees
-
+        "Attendees": attendees,
+        "FileType": file_type,
+        "FileCategory": file_category
     }
     # Clear entity cache when new content is saved
     clear_entity_cache()

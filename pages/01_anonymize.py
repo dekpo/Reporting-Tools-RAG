@@ -24,14 +24,55 @@ st.title(lib.APP_TITLE)
 
 st.divider()
 
-# Steps - updated to show position 1 in the new 4-step process
-# lib.steps(0)
-
-# st.divider()
-
 st.header("Anonymize Content")
 
 st.markdown("<p>Apply anonymity to entities (people, organizations, locations...) using this tool, keeping references relating to entities considered substantive to discussion.</p>",unsafe_allow_html=True)
+
+# Check if content exists to determine intelligent defaults
+if "saved_content" in st.session_state:
+    # Get file type and category for intelligent defaults
+    file_type = st.session_state["saved_content"].get("FileType", "regular_docx")
+    file_category = st.session_state["saved_content"].get("FileCategory", "document")
+    
+    # Set intelligent defaults based on file type
+    if file_category == "transcript" or file_type in ["vtt", "teams_docx"]:
+        # Meeting transcripts should have anonymization enabled by default
+        default_anonymize = True
+        default_show_sections = True
+        help_text = "✅ Recommended for meeting transcripts to protect participant privacy"
+    else:
+        # Documents should have anonymization disabled by default  
+        default_anonymize = False
+        default_show_sections = False
+        help_text = "Enable to anonymize entities in your document content"
+else:
+    # Fallback defaults
+    default_anonymize = False
+    default_show_sections = False
+    help_text = "Enable to anonymize entities in your document content"
+
+# Main anonymization toggle - moved to top
+enable_anonymization = st.checkbox(
+    '**🎭 Anonymize All Entities**',
+    value=default_anonymize,
+    help=help_text,
+    key="enable_anonymization_toggle"
+)
+
+# Show additional info based on file type
+if "saved_content" in st.session_state:
+    file_type = st.session_state["saved_content"].get("FileType", "regular_docx")
+    file_category = st.session_state["saved_content"].get("FileCategory", "document")
+    
+    if file_category == "transcript" or file_type in ["vtt", "teams_docx"]:
+        if enable_anonymization:
+            st.info("🎯 **Meeting transcript detected** - Anonymization is recommended to protect participant privacy.")
+        else:
+            st.warning("⚠️ **Meeting transcript detected** - Consider enabling anonymization to protect participant privacy.")
+    elif enable_anonymization:
+        st.info("📄 **Document anonymization enabled** - Entities will be replaced with generic terms.")
+
+st.divider()
 
 # Initialize or load SpaCy model from session state (OPTIMIZATION: Cache model loading)
 @st.cache_resource
@@ -124,10 +165,15 @@ for label in nlp.pipe_labels['ner']:
         index = default_labels.index( label )
         pipe_labels["Replacement"].append( default_replacements[index] )
 
-st.subheader("Choose entity categories")
-st.write(f'**{len(pipe_labels["Label"])} categories** of entities to anonymize.')
+# Only show entity configuration when anonymization is enabled
+if enable_anonymization:
+    st.subheader("Choose entity categories")
+    st.write(f'**{len(pipe_labels["Label"])} categories** of entities to anonymize.')
 
-edited_labels = st.data_editor(pipe_labels,disabled=["Label","Description"],use_container_width=True)
+    edited_labels = st.data_editor(pipe_labels,disabled=["Label","Description"],use_container_width=True)
+else:
+    # Use default configuration when anonymization is disabled  
+    edited_labels = pipe_labels.copy()
 
 # Check if content exists
 if "saved_content" not in st.session_state:
@@ -138,33 +184,39 @@ else:
     title = st.session_state["saved_content"]["Title"]
     txt = st.session_state["saved_content"]["Data"]
     
-    # Create configuration for caching
-    selected_labels = [edited_labels["Label"][i] for i, apply in enumerate(edited_labels["Apply"]) if apply]
-    label_replacements = {edited_labels["Label"][i]: edited_labels["Replacement"][i] 
-                         for i, apply in enumerate(edited_labels["Apply"]) if apply}
-    
-    # Generate hash for current content and configuration
-    content_hash = generate_content_hash(txt, {"labels": selected_labels, "replacements": label_replacements})
-    
-    # Check if we need to reprocess (OPTIMIZATION: Avoid redundant processing)
-    cache_key = f"entities_cache_{content_hash}"
-    
-    if cache_key not in st.session_state or st.session_state.get("force_reprocess", False):
-        # Only show processing spinner when actually processing
-        with st.spinner('Processing entities... Please wait.'):
-            # Process entities (cached function will handle efficiency)
-            selected = extract_entities_batch(txt, selected_labels, label_replacements)
-            
-            # Cache the results
-            st.session_state[cache_key] = selected
-            st.session_state["last_processed_hash"] = content_hash
-            
-            # Reset force reprocess flag
-            if "force_reprocess" in st.session_state:
-                del st.session_state["force_reprocess"]
+    # Only process entities if anonymization is enabled
+    if enable_anonymization:
+        # Create configuration for caching
+        selected_labels = [edited_labels["Label"][i] for i, apply in enumerate(edited_labels["Apply"]) if apply]
+        label_replacements = {edited_labels["Label"][i]: edited_labels["Replacement"][i] 
+                             for i, apply in enumerate(edited_labels["Apply"]) if apply}
+        
+        # Generate hash for current content and configuration
+        content_hash = generate_content_hash(txt, {"labels": selected_labels, "replacements": label_replacements})
+        
+        # Check if we need to reprocess (OPTIMIZATION: Avoid redundant processing)
+        cache_key = f"entities_cache_{content_hash}"
+        
+        if cache_key not in st.session_state or st.session_state.get("force_reprocess", False):
+            # Only show processing spinner when actually processing
+            with st.spinner('Processing entities... Please wait.'):
+                # Process entities (cached function will handle efficiency)
+                selected = extract_entities_batch(txt, selected_labels, label_replacements)
+                
+                # Cache the results
+                st.session_state[cache_key] = selected
+                st.session_state["last_processed_hash"] = content_hash
+                
+                # Reset force reprocess flag
+                if "force_reprocess" in st.session_state:
+                    del st.session_state["force_reprocess"]
+        else:
+            # Use cached results
+            selected = st.session_state[cache_key]
     else:
-        # Use cached results
-        selected = st.session_state[cache_key]
+        # When anonymization is disabled, create empty selected structure
+        selected = {}
+        content_hash = generate_content_hash(txt, {"labels": [], "replacements": {}})
     
     # Build document_entities structure from selected entities
     document_entities = {
@@ -173,8 +225,8 @@ else:
         "Category": []
     }
     
-    # Only proceed if we have entities to process
-    if len(selected) > 0 and any(len(selected[cat]["Entity"]) > 0 for cat in selected):
+    # Only proceed if we have entities to process AND anonymization is enabled
+    if enable_anonymization and len(selected) > 0 and any(len(selected[cat]["Entity"]) > 0 for cat in selected):
         tab1, tab2 = st.tabs(["Edit entity by categories", "Edit all entities and save references"])
 
         with tab1:
@@ -214,8 +266,6 @@ else:
                 mime='text/csv',
             )
         
-        anonymize_now = st.checkbox('**Anonymize All Entities Now ?**',key=f"anonymize_now_{content_hash}",value=True,help="This feature can automatically detect entities in the content and replace them.")
-
         st.divider()
 
         st.write("""<div id='top-content'></div>""",unsafe_allow_html=True)
@@ -230,7 +280,7 @@ else:
 
         # Apply anonymization if requested (OPTIMIZATION: More efficient text replacement)
         processed_txt = txt
-        if anonymize_now:
+        if enable_anonymization:
             # Create replacement mapping for efficient processing
             replacement_map = {}
             for i, term in enumerate(edited_entities["Text"]):
@@ -286,6 +336,55 @@ else:
         st.divider()
         st.markdown("<p><a href='#top-content'>🔼Go Back To The Top Of This Content🔼</a></p>",unsafe_allow_html=True)
     else:
-        st.divider()
-        st.subheader("Nothing To Anonymize.")
-        st.info("No entities were found that match your selected categories, or all text segments were too short to process.")
+        # Handle case when anonymization is disabled or no entities found
+        if not enable_anonymization:
+            st.write("""<div id='top-content'></div>""",unsafe_allow_html=True)
+            st.subheader("Your Content (No Anonymization)")
+            st.markdown("<p><a href='#download-or-save-your-data'>🔽Download Or Save Your Data At The Bottom Of This Page🔽</a></p>",unsafe_allow_html=True)
+            
+            content = st.container(border=True)
+            content.write("""<div class='extracted-content' />""",unsafe_allow_html=True)
+            
+            # Display content without anonymization
+            processed_txt = txt.replace("$","\\$").replace("\n","<br>")
+            content.markdown(processed_txt,unsafe_allow_html=True)
+            content_txt = lib.strip_tags(processed_txt)
+            
+            st.divider()
+            st.write("""<div id='download-or-save-your-data'></div>""",unsafe_allow_html=True)
+            st.subheader("Download Or Save Your Data")
+            st.write(f"This content is {len(content_txt)} chars long.")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                @st.cache_data
+                def create_download_doc(text_content):
+                    doc_download = Document()
+                    raw_text = lib.strip_tags(text_content)
+                    raw_text = lib.filter_xml_chars(raw_text)
+                    doc_download.add_paragraph(raw_text)
+                    bio = io.BytesIO()
+                    doc_download.save(bio)
+                    return bio.getvalue()
+                
+                doc_data = create_download_doc(processed_txt)
+                st.download_button(
+                    label="**Download Your Content As DOCX File**",
+                    data=doc_data,
+                    file_name=f'{lib.current_datetime}_content.docx',
+                    mime="docx"
+                )
+                
+            with col2:
+                st.write("OR")
+                
+            with col3:
+                # For non-anonymized content, save with empty entities
+                empty_entities = {"Text": [], "Replacement": [], "Category": []}
+                if st.button(label="**Save This Content For Next Step >> Ask ChatGPT**",type="primary",key="save_content_btn", on_click=lib.save_anonymisation,args=[title,content_txt,empty_entities]):
+                    st.switch_page("./pages/02_chatgpt.py")
+        else:
+            st.divider()
+            st.subheader("Nothing To Anonymize.")
+            st.info("No entities were found that match your selected categories, or all text segments were too short to process.")
