@@ -10,7 +10,7 @@ This application provides a streamlined workflow for processing meeting transcri
 
 ## Features
 - **File Support**: Support for Teams/Zoom .vtt files, Teams .docx files, regular .docx documents, PDF files, CSV files, and Excel files
-- **Model Selection**: Choose from GPT-4o, GPT-4 Turbo, GPT-4, or GPT-3.5 Turbo models
+- **Smart Model Selection**: Auto-updating list shows only models optimized for RAG and data analysis (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo)
 - **Anonymization**: Automatically detect and replace sensitive entities (names, organizations, etc.)
 - **Advanced AI Agent**: Multi-tool AI system with document search, data analysis, and visualization capabilities
 - **RAG Integration**: Uses Retrieval-Augmented Generation for more accurate AI responses
@@ -90,7 +90,7 @@ This application provides a streamlined workflow for processing meeting transcri
 
 2. **Navigate to ChatGPT Tool**: 
    - Go to the ChatGPT Tool page
-   - Select your OpenAI model (GPT-4o recommended for best results)
+   - Select your OpenAI model (gpt-4o for complex analysis, gpt-4o-mini for faster/cheaper, gpt-3.5-turbo for simple tasks)
    - Ensure your datasets are selected in the "Tabular Data Sources" section
 
 3. **Request Charts with Natural Language**:

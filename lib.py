@@ -79,6 +79,219 @@ import random
 APP_TITLE = "UN CEB - :book: Reporting Tools"
 APP_VERSION = "2.7"
 
+# ============================================================================
+# MODEL MANAGEMENT SYSTEM - Auto-updating OpenAI model list
+# ============================================================================
+# NOTE: Standard GPT models (gpt-4o, gpt-4-turbo, etc.) cannot browse the web
+# or access external URLs by default. To enable web browsing:
+# - Implement a custom tool using a web search API (e.g., Serper, Brave Search)
+# - Use the LangChain agent's tool system to add web search capabilities
+# - The model can then reason about when to search the web and use the results
+# ============================================================================
+
+# Fallback model list (used if API fetch fails)
+# Focused on models best for RAG, text analysis, and data analysis
+FALLBACK_MODELS = {
+    "Recommended for RAG & Analysis": [
+        "gpt-4o",           # Best for complex reasoning and data analysis
+        "gpt-4o-mini",      # Faster and cheaper, good for most tasks
+        "gpt-4-turbo",      # Strong reasoning, good for complex prompts
+    ],
+    "Budget Options": [
+        "gpt-3.5-turbo",    # Fast and economical for simple tasks
+    ]
+}
+
+# Model descriptions and capabilities (focused on RAG & data analysis)
+MODEL_INFO = {
+    "gpt-4o": "🌟 Best for RAG & data analysis - 128K context, excellent reasoning, handles complex queries",
+    "gpt-4o-mini": "⚡ Fast & affordable - Good for most RAG tasks, 128K context, 60% cheaper than GPT-4o",
+    "gpt-4-turbo": "💪 Strong reasoning - Excellent for complex document analysis and multi-step tasks",
+    "gpt-3.5-turbo": "💰 Budget option - Fast for simple queries, 16K context, lowest cost",
+}
+
+# Deprecated models and their recommended replacements
+DEPRECATED_MODELS = {
+    "gpt-4": "gpt-4o",
+    "gpt-4-0314": "gpt-4o",
+    "gpt-4-32k": "gpt-4o",
+    "gpt-4-0613": "gpt-4o",
+    "gpt-3.5-turbo-0301": "gpt-3.5-turbo",
+    "gpt-3.5-turbo-16k": "gpt-3.5-turbo",
+    "gpt-3.5-turbo-0613": "gpt-3.5-turbo",
+}
+
+# Cache for fetched models (to avoid repeated API calls)
+_model_cache = {
+    "models": None,
+    "timestamp": 0,
+    "cache_duration": 3600  # Cache for 1 hour
+}
+
+def get_available_models(api_key=None, force_refresh=False):
+    """
+    Fetch available GPT models from OpenAI API with caching and fallback.
+    
+    Args:
+        api_key: OpenAI API key (optional, uses session state if not provided)
+        force_refresh: Force refresh the cache
+    
+    Returns:
+        dict: Dictionary of categorized models
+    """
+    import time
+    
+    # Check cache first
+    current_time = time.time()
+    if not force_refresh and _model_cache["models"] is not None:
+        if current_time - _model_cache["timestamp"] < _model_cache["cache_duration"]:
+            return _model_cache["models"]
+    
+    # Try to fetch from API
+    if api_key or (hasattr(st, 'session_state') and "gpt_api_key" in st.session_state):
+        try:
+            if not api_key:
+                api_key = st.session_state["gpt_api_key"]
+            
+            client = OpenAI(api_key=api_key)
+            models_list = client.models.list()
+            
+            # Filter and categorize GPT models (only those useful for RAG & data analysis)
+            recommended_models = []
+            budget_models = []
+            
+            # Whitelist of models suitable for RAG and data analysis
+            useful_models = {
+                'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 
+                'gpt-4-turbo-preview', 'gpt-3.5-turbo'
+            }
+            
+            for model in models_list.data:
+                model_id = model.id
+                # Only include chat/completion GPT models
+                if not model_id.startswith('gpt-'):
+                    continue
+                
+                # Skip deprecated models
+                if model_id in DEPRECATED_MODELS:
+                    continue
+                
+                # Skip non-chat models (embedding, audio, vision-only, etc.)
+                if any(skip in model_id.lower() for skip in ['whisper', 'dall-e', 'tts', 'embedding', 'instruct']):
+                    continue
+                
+                # Only include models in our whitelist or that match our patterns
+                if model_id not in useful_models:
+                    # Allow if it's a dated snapshot of our useful models
+                    if not any(base in model_id for base in ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo']):
+                        continue
+                
+                # Categorize useful models
+                if 'gpt-4o' in model_id or 'gpt-4-turbo' in model_id:
+                    recommended_models.append(model_id)
+                elif 'gpt-3.5' in model_id:
+                    budget_models.append(model_id)
+            
+            # Build categorized dictionary (simplified for clarity)
+            categorized_models = {}
+            
+            if recommended_models:
+                # Keep only the main models, limit to 3 most recent
+                main_models = []
+                for priority_model in ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo']:
+                    if priority_model in recommended_models:
+                        main_models.append(priority_model)
+                
+                categorized_models["Recommended for RAG & Analysis"] = main_models
+            
+            if budget_models:
+                # Only keep gpt-3.5-turbo (the main one)
+                if 'gpt-3.5-turbo' in budget_models:
+                    categorized_models["Budget Options"] = ['gpt-3.5-turbo']
+            
+            # If we got models, cache them
+            if categorized_models:
+                _model_cache["models"] = categorized_models
+                _model_cache["timestamp"] = current_time
+                return categorized_models
+            
+        except Exception as e:
+            # If API call fails, use fallback
+            pass
+    
+    # Return fallback models
+    return FALLBACK_MODELS
+
+def get_model_description(model_name):
+    """
+    Get description for a model with context about RAG/data analysis suitability.
+    
+    Args:
+        model_name: Name of the model
+    
+    Returns:
+        str: Model description
+    """
+    if model_name in MODEL_INFO:
+        return MODEL_INFO[model_name]
+    
+    # Generate generic description based on model name
+    if 'gpt-4o' in model_name:
+        return "🌟 GPT-4o variant - Excellent for RAG and complex data analysis"
+    elif 'gpt-4-turbo' in model_name:
+        return "💪 GPT-4 Turbo variant - Strong reasoning for document analysis"
+    elif 'gpt-4' in model_name:
+        return "⚠️ Older GPT-4 - Consider upgrading to gpt-4o for better performance"
+    elif 'gpt-3.5' in model_name:
+        return "💰 Budget model - Good for simple queries, limited for complex analysis"
+    else:
+        return "OpenAI language model"
+
+def check_model_deprecation(model_name):
+    """
+    Check if a model is deprecated and get replacement.
+    
+    Args:
+        model_name: Name of the model to check
+    
+    Returns:
+        tuple: (is_deprecated, replacement_model)
+    """
+    if model_name in DEPRECATED_MODELS:
+        return True, DEPRECATED_MODELS[model_name]
+    return False, None
+
+def get_default_model():
+    """
+    Get the recommended default model.
+    
+    Returns:
+        str: Default model name
+    """
+    return "gpt-4o"
+
+def validate_model_availability(client, model_name):
+    """
+    Validate that a specific model is available for the given API key.
+    
+    Args:
+        client: OpenAI client instance
+        model_name: Model name to validate
+    
+    Returns:
+        bool: True if model is available, False otherwise
+    """
+    try:
+        models = client.models.list()
+        available_models = [model.id for model in models.data]
+        return model_name in available_models
+    except:
+        return True  # Assume available if check fails
+
+# ============================================================================
+# END OF MODEL MANAGEMENT SYSTEM
+# ============================================================================
+
 def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)

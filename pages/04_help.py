@@ -38,7 +38,7 @@ def show_quick_start():
         
         #### **Step 3: AI Analysis** 🤖
         - Head to the **ChatGPT Tool** page
-        - **Select your AI model** (GPT-4o recommended for best results)
+        - **Select your AI model** (gpt-4o recommended for complex analysis, gpt-4o-mini for faster/cheaper)
         - Choose your documents/datasets from the sidebar sources
         - Ask questions, request analysis, or generate charts using natural language
         - The AI agent uses advanced tools for document search, data analysis, and visualization
@@ -55,7 +55,7 @@ def show_quick_start():
         
         ✅ **Start Simple:** Upload one document first to get familiar
         
-        ✅ **Choose Right Model:** GPT-4o for complex analysis, GPT-3.5 for quick tasks
+        ✅ **Choose Right Model:** gpt-4o for complex analysis, gpt-4o-mini for balanced performance, gpt-3.5-turbo for simple tasks
         
         ✅ **Use Agent Tools:** Ask for charts, data summaries, and cross-references
         
@@ -604,11 +604,45 @@ def show_ai_analysis_guide():
     st.markdown("""
     ### Model Selection
     
-    Choose the right AI model for your needs:
-    - **GPT-4o**: Latest model, best for complex analysis and visualizations
-    - **GPT-4 Turbo**: Powerful model with strong reasoning capabilities  
-    - **GPT-4**: Original model with high accuracy
-    - **GPT-3.5 Turbo**: Fast and cost-effective for basic tasks
+    The app shows only models suitable for RAG and data analysis:
+    
+    **Recommended for RAG & Analysis:**
+    - **gpt-4o** 🌟 - Best choice! 128K context, excellent reasoning, handles complex document analysis
+    - **gpt-4o-mini** ⚡ - Faster and 60% cheaper than GPT-4o, still excellent for most RAG tasks
+    - **gpt-4-turbo** 💪 - Strong reasoning for complex multi-step analysis
+    
+    **Budget Options:**
+    - **gpt-3.5-turbo** 💰 - Fast and economical for simple queries (16K context, limited for complex analysis)
+    
+    **Note:** The model list automatically updates from OpenAI's API, showing only models useful for text and data analysis. Use the "🔄 Refresh Models" button in Model Settings to fetch updates.
+    
+    ### 🔄 Smart Model Selection
+    
+    The app automatically filters and shows only models suitable for RAG and data analysis:
+    
+    **How it works:**
+    - Model list is fetched from OpenAI's API when you validate your API key
+    - Only models good for text/data analysis are shown (no image, audio, or embedding models)
+    - Models are cached for 1 hour to minimize API calls
+    - Deprecated models trigger warnings with recommended replacements
+    
+    **Benefits:**
+    - ✅ No confusion - only see models that work well for this app
+    - ✅ Automatic deprecation warnings
+    - ✅ Focused on RAG-capable models with good context windows
+    - ✅ Clear guidance on which model to use when
+    
+    ### 🌐 Web Browsing Capabilities
+    
+    **Current Status:** Standard GPT models (gpt-4o, gpt-4-turbo) **cannot browse the web** or access external URLs by default.
+    
+    **To enable web search:**
+    You would need to implement a custom tool using:
+    - Web search API (e.g., Serper API, Brave Search API, SerpAPI)
+    - LangChain agent tool integration
+    - The model can then decide when to search and use results
+    
+    This feature is not currently implemented but could be added as an enhancement.
     
     ### What the AI Agent Can Do
     
@@ -786,7 +820,7 @@ def show_troubleshooting():
             "solutions": [
                 "Check your internet connection",
                 "Verify OpenAI API key is configured and valid",
-                "Try selecting a different model (GPT-3.5 for testing)",
+                "Try a different model (gpt-4o-mini is faster, gpt-3.5-turbo for testing)",
                 "Check if documents/datasets are properly loaded",
                 "Refresh the page and try again"
             ]
@@ -836,7 +870,7 @@ def show_troubleshooting():
     **💡 Still having issues?** 
     
     1. Try enabling debug mode to see agent tool execution
-    2. Check the model selection (GPT-4o for complex tasks)
+    2. Use appropriate model (gpt-4o for complex tasks, gpt-4o-mini for most tasks)
     3. Verify your data sources are properly loaded
     4. Contact the development team using the information below
     """)

@@ -85,31 +85,14 @@ if "gpt_api_key" not in st.session_state:
 
     st.markdown("<a href=\"https://platform.openai.com/api-keys\" class=\"link-primary\" target=\"_blank\">Or get your own OpenAI API key here !</a>",unsafe_allow_html=True)
 
-    # Define model options with categorization
-    model_options = {
-        "GPT-4 Models (Most Capable)": [
-            "gpt-4o", 
-            "gpt-4-turbo", 
-            "gpt-4"
-        ],
-        "GPT-3.5 Models (Fast & Cost-effective)": [
-            "gpt-3.5-turbo"
-        ]
-    }
+    # Get available models (will use fallback if no API key yet)
+    model_options = lib.get_available_models(api_key=MY_API_KEY if MY_API_KEY and MY_API_KEY.startswith('sk-') else None)
 
     # Flatten the options for selectbox
     all_models = []
     for category, models in model_options.items():
         for model in models:
             all_models.append(f"{category}: {model}")
-
-    # Model descriptions for information
-    model_descriptions = {
-        "gpt-4o": "Latest and most capable model, optimized for performance and cost",
-        "gpt-4-turbo": "Powerful model with strong reasoning capabilities",
-        "gpt-4": "Original GPT-4 model with high accuracy",
-        "gpt-3.5-turbo": "Fast and cost-effective model for most general tasks"
-    }
 
     # Select model with categorization
     selected_model_with_category = st.selectbox(
@@ -122,9 +105,22 @@ if "gpt_api_key" not in st.session_state:
     # Extract just the model name
     selected_model = selected_model_with_category.split(": ")[-1]
     
-    # Show model description if available
-    if selected_model in model_descriptions:
-        st.caption(model_descriptions[selected_model])
+    # Check if model is deprecated
+    is_deprecated, replacement = lib.check_model_deprecation(selected_model)
+    if is_deprecated:
+        st.warning(f"⚠️ **{selected_model}** is deprecated. Consider using **{replacement}** instead.", icon="⚠️")
+    
+    # Show model description
+    model_description = lib.get_model_description(selected_model)
+    st.caption(model_description)
+    
+    # Show last update info
+    if "_model_cache" in dir(lib) and lib._model_cache["models"] is not None:
+        import datetime
+        last_update = datetime.datetime.fromtimestamp(lib._model_cache["timestamp"]).strftime("%H:%M:%S")
+        st.caption(f"ℹ️ Model list updated at {last_update}")
+    else:
+        st.caption("ℹ️ Using fallback model list - will update after API key validation")
 
     # Store in session state
     if "openai_model" not in st.session_state:
@@ -141,20 +137,31 @@ if "gpt_api_key" not in st.session_state:
             client = OpenAI(api_key=MY_API_KEY)
             try:
                 # Simple validation with minimal API call
-                with st.spinner("Validating API key..."):
+                with st.spinner("Validating API key and fetching latest models..."):
                     # Just make a simple models list call - much faster than completion
                     models = client.models.list()
+                    
+                    # Refresh model list with the new API key
+                    lib.get_available_models(api_key=MY_API_KEY, force_refresh=True)
                     
                     # Check if selected model is available (without making a completion call)
                     available_models = [model.id for model in models.data]
                     if selected_model not in available_models and not any(model_id.startswith(selected_model) for model_id in available_models):
-                        st.warning(f"Model '{selected_model}' may not be available. Falling back to gpt-3.5-turbo.", icon="⚠️")
-                        selected_model = "gpt-3.5-turbo"
+                        # Try to use the default model
+                        default_model = lib.get_default_model()
+                        if default_model in available_models:
+                            st.warning(f"Model '{selected_model}' may not be available. Using {default_model} instead.", icon="⚠️")
+                            selected_model = default_model
+                        else:
+                            # Fallback to gpt-3.5-turbo
+                            st.warning(f"Model '{selected_model}' may not be available. Falling back to gpt-3.5-turbo.", icon="⚠️")
+                            selected_model = "gpt-3.5-turbo"
                         st.session_state["openai_model"] = selected_model
                     
                     # Store API key immediately - no need for test completion
                     st.session_state["gpt_api_key"] = MY_API_KEY
-                    st.success(f"API key validated! Using model: {st.session_state['openai_model']}", icon="✅")
+                    st.success(f"✅ API key validated! Using model: {st.session_state['openai_model']}", icon="✅")
+                    st.info(f"🔄 Model list updated with {len([m for models in lib._model_cache['models'].values() for m in models])} available models")
                     
                     # Load data sources in background (non-blocking)
                     st.rerun()
@@ -311,30 +318,48 @@ else:
         # AI Model Configuration Section with Expander
         with st.expander("🤖 AI Model Configuration", expanded=True):
             # Display current model and provide model information
-            st.info(f"Current model: **{st.session_state['openai_model']}**")
+            current_model = st.session_state['openai_model']
+            st.info(f"Current model: **{current_model}**")
             
-            # Add model information based on the selected model
-            model_info = {
-                "gpt-4o": "Latest and most capable model, optimized for performance and cost-effectiveness.",
-                "gpt-4-turbo": "Powerful model with strong reasoning capabilities and knowledge up to Apr 2023.",
-                "gpt-4": "Original GPT-4 model with high accuracy and reasoning capabilities.",
-                "gpt-3.5-turbo": "Fast and cost-effective model for most general tasks. 16K context window."
-            }
+            # Check if current model is deprecated
+            is_deprecated, replacement = lib.check_model_deprecation(current_model)
+            if is_deprecated:
+                st.warning(f"⚠️ This model is deprecated. Recommended replacement: **{replacement}**")
             
-            if st.session_state["openai_model"] in model_info:
-                st.caption(model_info[st.session_state["openai_model"]])
+            # Show model description
+            model_description = lib.get_model_description(current_model)
+            st.caption(model_description)
             
             # Model rate information
             st.caption("**Note:** Different models have different pricing. Check [OpenAI API Pricing](https://openai.com/api/pricing/) for details.")
             
-            # Add a button to reset API key and change model
-            if st.button("Change AI Model", use_container_width=True):
-                del st.session_state["gpt_api_key"]
-                del st.session_state["openai_model"]
-                # Clear vector DB session state if it exists
-                if "vector_db" in st.session_state:
-                    del st.session_state["vector_db"]
-                st.rerun()
+            # Show model list status
+            col1, col2 = st.columns(2)
+            with col1:
+                # Add a button to reset API key and change model
+                if st.button("Change AI Model", use_container_width=True):
+                    del st.session_state["gpt_api_key"]
+                    del st.session_state["openai_model"]
+                    # Clear vector DB session state if it exists
+                    if "vector_db" in st.session_state:
+                        del st.session_state["vector_db"]
+                    st.rerun()
+            
+            with col2:
+                # Add a button to refresh model list
+                if st.button("🔄 Refresh Models", use_container_width=True, help="Fetch latest models from OpenAI API"):
+                    if "gpt_api_key" in st.session_state:
+                        lib.get_available_models(api_key=st.session_state["gpt_api_key"], force_refresh=True)
+                        st.success("✅ Model list refreshed!")
+                        st.rerun()
+            
+            # Show cache status
+            if lib._model_cache["models"] is not None:
+                import datetime
+                last_update = datetime.datetime.fromtimestamp(lib._model_cache["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                st.caption(f"📊 Model list last updated: {last_update}")
+            else:
+                st.caption("📊 Using fallback model list")
         
         # Advanced Settings Section with Expander
         with st.expander("🔧 Advanced Settings", expanded=False):
