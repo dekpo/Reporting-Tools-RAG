@@ -77,7 +77,7 @@ from datetime import datetime
 import random
 
 APP_TITLE = "UN CEB - :book: Reporting Tools"
-APP_VERSION = "2.7"
+APP_VERSION = "2.8.0"
 
 # ============================================================================
 # MODEL MANAGEMENT SYSTEM - Auto-updating OpenAI model list
