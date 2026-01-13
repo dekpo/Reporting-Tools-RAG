@@ -5,3 +5,8 @@ en_core_web_md/
 logs/
 data_storage/
 .streamlit/secrets.toml
+
+# PyInstaller
+build/
+dist/
+*.spec
