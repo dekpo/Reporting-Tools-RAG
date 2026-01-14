@@ -6,7 +6,11 @@ logs/
 data_storage/
 .streamlit/secrets.toml
 
-# PyInstaller
+# PyInstaller build artifacts
 build/
 dist/
-*.spec
+DTN-Reporting-Tools-*/
+*.zip
+
+# Note: .spec files are NOT ignored - they should be committed for reproducible builds
+# Note: reporting-tools_v*.py runner files are NOT ignored - they should be committed
