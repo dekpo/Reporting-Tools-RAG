@@ -1940,6 +1940,103 @@ except ImportError:
     TOOLS_AVAILABLE = False
     st.warning("Tool-calling dependencies are missing. Please install langchain-experimental and langchain-openai.")
 
+# ============================================================================
+# WEB PAGE READING FUNCTIONALITY
+# ============================================================================
+# Simple web page reader using minimal dependencies
+# Uses requests (already available via openai/langchain) or urllib as fallback
+
+def fetch_webpage_content(url: str, max_length: int = 8000) -> str:
+    """
+    Fetch and extract text content from a web page.
+    Uses requests if available, falls back to urllib.
+    
+    Args:
+        url: The URL to fetch
+        max_length: Maximum character length to return (to avoid token limits)
+    
+    Returns:
+        str: Extracted text content from the web page
+    """
+    try:
+        # Try using requests first (likely already installed)
+        try:
+            import requests
+            response = requests.get(url, timeout=10, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+            response.raise_for_status()
+            html_content = response.text
+        except ImportError:
+            # Fallback to urllib (standard library)
+            import urllib.request
+            import urllib.error
+            req = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                html_content = response.read().decode('utf-8')
+        
+        # Simple HTML tag removal - extract text content
+        import re
+        
+        # Remove script and style elements
+        text = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Remove HTML comments
+        text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+        
+        # Remove all HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # Decode HTML entities
+        import html
+        text = html.unescape(text)
+        
+        # Clean up whitespace
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+        
+        # Truncate if too long (to avoid token limits)
+        if len(text) > max_length:
+            text = text[:max_length] + f"\n\n[Content truncated - showing first {max_length} characters]"
+        
+        return text
+        
+    except Exception as e:
+        return f"Error fetching webpage: {str(e)}"
+
+@tool
+def read_webpage(url: str) -> str:
+    """
+    Read and extract text content from a web page URL.
+    Use this when the user provides a URL (https://...) and wants to know what's on that page.
+    
+    Args:
+        url: The complete URL to read (must start with http:// or https://)
+    
+    Returns:
+        str: The text content extracted from the web page
+    
+    Example usage:
+        - User asks: "What does https://example.com say about X?"
+        - User provides: "Can you read this article: https://news.site/article"
+        - User says: "Summarize https://blog.com/post"
+    """
+    # Validate URL
+    if not url.startswith(('http://', 'https://')):
+        return "Invalid URL. Please provide a complete URL starting with http:// or https://"
+    
+    # Fetch and return content
+    content = fetch_webpage_content(url)
+    
+    if content.startswith("Error"):
+        return f"{content}\n\nNote: The webpage may be blocking automated access, require JavaScript, or be temporarily unavailable."
+    
+    return f"Content from {url}:\n\n{content}"
+
 @tool
 def search_documents(query: str, doc_sources: Optional[str] = None, category_filter: Optional[str] = None, tag_filter: Optional[str] = None) -> str:
     """
@@ -2785,7 +2882,8 @@ def create_unified_agent():
         analyze_tabular_data,
         cross_reference_analysis,
         get_data_summary,
-        create_visualization
+        create_visualization,
+        read_webpage  # New tool for reading web pages
     ]
     
     # Count available data sources
@@ -2809,6 +2907,7 @@ Available capabilities:
 - cross_reference_analysis: Find connections between documents and data
 - get_data_summary: Get overview information about available datasets
 - create_visualization: Generate charts and graphs from tabular data (bar, line, scatter, histogram, pie, box, heatmap)
+- read_webpage: Read and extract text content from web page URLs (use when user provides https://... links)
 
 Current session contains:
 - Text Documents: {num_documents} documents available for search
@@ -2861,6 +2960,7 @@ TOOL SELECTION STRATEGY:
 - Document content questions → search_documents (direct, but use get_document_sources first if user needs overview)
 - Questions needing both → cross_reference_analysis (single call)
 - Data structure questions → get_data_summary (only when necessary)
+- Web page URLs (https://...) → read_webpage (when user provides or asks about URLs)
 
 IMPORTANT OUTPUT FORMATTING RULES:
 - NEVER use markdown image syntax ![alt](url) in your responses
