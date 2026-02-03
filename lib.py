@@ -77,7 +77,7 @@ from datetime import datetime
 import random
 
 APP_TITLE = "UN CEB - :book: Reporting Tools"
-APP_VERSION = "2.8.0"
+APP_VERSION = "2.10.0"
 
 # ============================================================================
 # MODEL MANAGEMENT SYSTEM - Auto-updating OpenAI model list
@@ -392,6 +392,27 @@ def del_dialog(string):
     with col2:
         if st.button("No",type="primary"):
             st.rerun()
+
+def inject_navigation_warning(has_unsaved_changes=False, unsaved_count=0):
+    """
+    Inject JavaScript to warn user before navigating away with unsaved changes.
+    Uses beforeunload event to show browser's native warning dialog.
+    """
+    if has_unsaved_changes:
+        warning_script = f"""
+        <script>
+        // Add beforeunload event listener to warn about unsaved changes
+        window.addEventListener('beforeunload', function (e) {{
+            // Custom message (most browsers show generic message instead)
+            var confirmationMessage = 'You have {unsaved_count} unsaved message(s). Are you sure you want to leave?';
+            
+            e.preventDefault();
+            e.returnValue = confirmationMessage;
+            return confirmationMessage;
+        }});
+        </script>
+        """
+        st.components.v1.html(warning_script, height=0)
 
 def sidebar():
     st.sidebar.header(":book: Reporting Tools",divider=True)
@@ -1675,6 +1696,185 @@ def get_delimiter(file, bytes=4096):
     except Exception:
         # If all else fails, return comma as default
         return ','
+
+# ============================================================================
+# CONVERSATION PERSISTENCE - Save/Load chat history
+# ============================================================================
+
+def get_conversations_directory():
+    """Get the directory path for stored conversations"""
+    return "./data_storage/conversations"
+
+def ensure_conversations_directory():
+    """Ensure the conversations directory exists"""
+    conv_dir = get_conversations_directory()
+    os.makedirs(conv_dir, exist_ok=True)
+    return conv_dir
+
+def generate_conversation_id():
+    """Generate a unique ID for a conversation"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    random_suffix = hashlib.md5(str(time.time()).encode()).hexdigest()[:6]
+    return f"conv_{timestamp}_{random_suffix}"
+
+def save_conversation(messages, conversation_id=None, title=None, auto_save=False):
+    """
+    Save conversation messages to disk.
+    
+    Args:
+        messages: List of message dictionaries with 'role' and 'content'
+        conversation_id: Optional existing conversation ID to update
+        title: Optional custom title for the conversation
+        auto_save: Whether this is an auto-save (vs manual save)
+    
+    Returns:
+        conversation_id: The ID of the saved conversation
+    """
+    ensure_conversations_directory()
+    
+    # Generate new ID if not provided
+    if conversation_id is None:
+        conversation_id = generate_conversation_id()
+    
+    # Auto-generate title if not provided
+    if title is None:
+        # Try to use document title from session state
+        if "saved_anonymisation" in st.session_state:
+            title = f"Chat: {st.session_state['saved_anonymisation']['Title']}"
+        else:
+            # Use first user message as title (truncated)
+            first_user_msg = next((m['content'] for m in messages if m['role'] == 'user'), 'Conversation')
+            title = first_user_msg[:50] + "..." if len(first_user_msg) > 50 else first_user_msg
+    
+    # Prepare conversation data
+    conversation_data = {
+        "id": conversation_id,
+        "title": title,
+        "messages": messages,
+        "message_count": len(messages),
+        "created_at": datetime.now().isoformat(),
+        "last_saved": datetime.now().isoformat(),
+        "auto_save": auto_save,
+        "model": st.session_state.get("openai_model", "unknown"),
+        # Store chart references if any
+        "stored_charts": st.session_state.get("stored_charts", {})
+    }
+    
+    # Save to JSON file
+    conv_path = os.path.join(get_conversations_directory(), f"{conversation_id}.json")
+    with open(conv_path, 'w', encoding='utf-8') as f:
+        json.dump(conversation_data, f, indent=2, ensure_ascii=False)
+    
+    return conversation_id
+
+def load_conversation(conversation_id):
+    """
+    Load a conversation from disk.
+    
+    Args:
+        conversation_id: The ID of the conversation to load
+    
+    Returns:
+        Dictionary with conversation data or None if not found
+    """
+    conv_path = os.path.join(get_conversations_directory(), f"{conversation_id}.json")
+    
+    if os.path.exists(conv_path):
+        try:
+            with open(conv_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            st.error(f"Error loading conversation: {e}")
+            return None
+    return None
+
+def list_conversations(limit=50):
+    """
+    List all saved conversations, sorted by most recent first.
+    
+    Args:
+        limit: Maximum number of conversations to return
+    
+    Returns:
+        List of conversation metadata dictionaries
+    """
+    ensure_conversations_directory()
+    conv_dir = get_conversations_directory()
+    
+    conversations = []
+    
+    # Get all conversation files
+    if os.path.exists(conv_dir):
+        for filename in os.listdir(conv_dir):
+            if filename.endswith('.json'):
+                filepath = os.path.join(conv_dir, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        conv_data = json.load(f)
+                        # Extract metadata
+                        conversations.append({
+                            "id": conv_data.get("id"),
+                            "title": conv_data.get("title", "Untitled"),
+                            "message_count": conv_data.get("message_count", 0),
+                            "created_at": conv_data.get("created_at"),
+                            "last_saved": conv_data.get("last_saved"),
+                            "model": conv_data.get("model", "unknown")
+                        })
+                except (json.JSONDecodeError, IOError):
+                    continue
+    
+    # Sort by last_saved (most recent first)
+    conversations.sort(key=lambda x: x.get("last_saved", ""), reverse=True)
+    
+    return conversations[:limit]
+
+def delete_conversation(conversation_id):
+    """
+    Delete a conversation from disk.
+    
+    Args:
+        conversation_id: The ID of the conversation to delete
+    
+    Returns:
+        True if deleted successfully, False otherwise
+    """
+    conv_path = os.path.join(get_conversations_directory(), f"{conversation_id}.json")
+    
+    if os.path.exists(conv_path):
+        try:
+            os.remove(conv_path)
+            return True
+        except OSError:
+            return False
+    return False
+
+def get_conversation_save_status():
+    """
+    Check if current conversation has unsaved changes.
+    
+    Returns:
+        Dictionary with save status information
+    """
+    messages = st.session_state.get("messages", [])
+    current_conv_id = st.session_state.get("current_conversation_id")
+    last_save_time = st.session_state.get("last_conversation_save_time")
+    last_save_message_count = st.session_state.get("last_save_message_count", 0)
+    
+    has_unsaved = len(messages) > last_save_message_count
+    
+    status = {
+        "has_unsaved": has_unsaved,
+        "message_count": len(messages),
+        "last_save_message_count": last_save_message_count,
+        "conversation_id": current_conv_id,
+        "last_save_time": last_save_time
+    }
+    
+    return status
+
+# ============================================================================
+# END CONVERSATION PERSISTENCE
+# ============================================================================
 
 def save_tabular_metadata(title, df, file_hash):
     """

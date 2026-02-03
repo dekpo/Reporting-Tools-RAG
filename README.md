@@ -52,6 +52,15 @@ Create charts and visualizations as part of your analysis:
 - **Interactive Charts**: Powered by Plotly for exploration and export
 - **Integrated Analysis**: Charts appear naturally as part of AI responses
 
+### 💾 Conversation Persistence (Never Lose Your Work)
+Automatic conversation backup with multiple safety nets:
+- **Auto-Save**: Conversations automatically saved every 5 messages
+- **Browser-Safe**: Survives refresh, navigation, and accidental closure
+- **Conversation History**: Browse and restore any previous conversation
+- **Save Status Indicator**: Real-time visual feedback on unsaved changes
+- **Multiple Warnings**: Alerts before clearing chat or navigating away
+- **Manual Control**: Save button for explicit backup before critical actions
+
 ## Example Use Cases
 
 ### 📝 Meeting Analysis
@@ -142,6 +151,7 @@ $ streamlit run app.py
 - Session state for temporary storage during workflow
 - ChromaDB for persistent vector storage of documents
 - Local parquet files for efficient tabular data storage
+- JSON files for conversation history and recovery
 - Logging functionality for tracking application usage
 
 ## How It Works
@@ -172,15 +182,17 @@ The app uses OpenAI's function calling with a sophisticated multi-tool agent sys
 - **Context Management**: Automatic optimization for long conversations
 - **Max Iterations**: Configure analysis depth (3-20 tool calls per response)
 - **Data Source Management**: Enable/disable specific documents or datasets
+- **Auto-Save Settings**: Configure conversation backup frequency (3-20 messages)
 
 ## Key Advantages
 
-### ✅ No Memory Limits
-Unlike traditional chat interfaces, this app stores all your documents and data persistently. You can:
+### ✅ No Memory Limits & Zero Data Loss
+Unlike traditional chat interfaces, this app stores all your documents, data, and conversations persistently. You can:
 - Upload unlimited documents and datasets
 - Access previous content across sessions
 - Build a growing knowledge base over time
-- Never worry about losing context
+- Never lose conversations due to refresh or navigation
+- Recover work from crashes or accidental closures
 
 ### ✅ Privacy-First Design
 Complete control over sensitive information:

@@ -191,6 +191,30 @@ else:
     # Initialize processed_anonymizations if it doesn't exist
     if "processed_anonymizations" not in st.session_state:
         st.session_state.processed_anonymizations = set()
+    
+    # Initialize conversation persistence variables
+    if "current_conversation_id" not in st.session_state:
+        st.session_state.current_conversation_id = None
+    
+    if "last_conversation_save_time" not in st.session_state:
+        st.session_state.last_conversation_save_time = None
+    
+    if "last_save_message_count" not in st.session_state:
+        st.session_state.last_save_message_count = 0
+    
+    if "conversation_title" not in st.session_state:
+        # Auto-generate title from document if available
+        if "saved_anonymisation" in st.session_state:
+            st.session_state.conversation_title = f"Chat: {st.session_state['saved_anonymisation']['Title']}"
+        else:
+            st.session_state.conversation_title = None
+    
+    # Auto-save configuration
+    if "auto_save_enabled" not in st.session_state:
+        st.session_state.auto_save_enabled = True
+    
+    if "auto_save_interval" not in st.session_state:
+        st.session_state.auto_save_interval = 5  # Save every 5 messages
 
     # Initialize client
     client = OpenAI(api_key=st.session_state["gpt_api_key"])
@@ -309,6 +333,150 @@ else:
             st.session_state.data_sources_loaded = True
 
 
+
+    # Auto-save conversation function
+    def auto_save_conversation():
+        """
+        Auto-save the current conversation if conditions are met.
+        Saves every N messages based on auto_save_interval setting.
+        """
+        if not st.session_state.get("auto_save_enabled", True):
+            return
+        
+        messages = st.session_state.get("messages", [])
+        if len(messages) == 0:
+            return
+        
+        # Check if we should save based on message count
+        last_save_count = st.session_state.get("last_save_message_count", 0)
+        auto_save_interval = st.session_state.get("auto_save_interval", 5)
+        
+        # Auto-save if we've added enough new messages
+        if len(messages) - last_save_count >= auto_save_interval:
+            try:
+                conversation_id = lib.save_conversation(
+                    messages=messages,
+                    conversation_id=st.session_state.get("current_conversation_id"),
+                    title=st.session_state.get("conversation_title"),
+                    auto_save=True
+                )
+                
+                # Update session state
+                st.session_state.current_conversation_id = conversation_id
+                st.session_state.last_conversation_save_time = time.time()
+                st.session_state.last_save_message_count = len(messages)
+                
+                if st.session_state.get("show_debug", False):
+                    st.success(f"💾 Auto-saved conversation ({len(messages)} messages)")
+                    
+            except Exception as e:
+                if st.session_state.get("show_debug", False):
+                    st.error(f"Auto-save failed: {e}")
+    
+    # Manual save conversation function
+    def manual_save_conversation():
+        """Manually save the current conversation"""
+        messages = st.session_state.get("messages", [])
+        if len(messages) == 0:
+            st.warning("No messages to save")
+            return False
+        
+        try:
+            conversation_id = lib.save_conversation(
+                messages=messages,
+                conversation_id=st.session_state.get("current_conversation_id"),
+                title=st.session_state.get("conversation_title"),
+                auto_save=False
+            )
+            
+            # Update session state
+            st.session_state.current_conversation_id = conversation_id
+            st.session_state.last_conversation_save_time = time.time()
+            st.session_state.last_save_message_count = len(messages)
+            
+            st.success(f"💾 Conversation saved successfully! ({len(messages)} messages)")
+            return True
+            
+        except Exception as e:
+            st.error(f"Failed to save conversation: {e}")
+            return False
+
+    # Conversation Browser Dialog Function
+    @st.dialog("💬 Saved Conversations", width="large")
+    def show_conversation_browser():
+        st.markdown("**Browse and restore your saved conversations**")
+        
+        # Get list of saved conversations
+        conversations = lib.list_conversations(limit=50)
+        
+        if not conversations:
+            st.info("📭 No saved conversations found. Conversations are auto-saved as you chat.")
+            st.markdown("💡 **Tip:** Conversations are automatically saved every 5 messages, or you can manually save using the **💾 Save** button.")
+            return
+        
+        st.success(f"Found {len(conversations)} saved conversation(s)")
+        
+        # Display conversations
+        for conv in conversations:
+            with st.expander(f"💬 {conv['title']}", expanded=False):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    st.write(f"**Messages:** {conv['message_count']}")
+                    st.write(f"**Model:** {conv['model']}")
+                
+                with col2:
+                    # Parse the date
+                    try:
+                        from datetime import datetime
+                        saved_date = datetime.fromisoformat(conv['last_saved'])
+                        st.write(f"**Saved:** {saved_date.strftime('%Y-%m-%d')}")
+                        st.write(f"**Time:** {saved_date.strftime('%H:%M')}")
+                    except:
+                        st.write(f"**Saved:** {conv.get('last_saved', 'Unknown')[:10]}")
+                
+                with col3:
+                    # Load button
+                    if st.button("📂 Load", key=f"load_{conv['id']}", use_container_width=True):
+                        # Check for unsaved changes
+                        save_status = lib.get_conversation_save_status()
+                        if save_status["has_unsaved"] and len(st.session_state.messages) > 0:
+                            st.warning("⚠️ You have unsaved changes in your current conversation!")
+                            if st.button("⚠️ Load anyway (lose unsaved)", key=f"confirm_load_{conv['id']}", type="secondary"):
+                                load_conversation_data(conv['id'])
+                        else:
+                            load_conversation_data(conv['id'])
+                    
+                    # Delete button
+                    if st.button("🗑️ Delete", key=f"delete_{conv['id']}", use_container_width=True):
+                        if lib.delete_conversation(conv['id']):
+                            st.success(f"Deleted conversation: {conv['title']}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete conversation")
+    
+    def load_conversation_data(conversation_id):
+        """Load a conversation and restore it to the current session"""
+        conv_data = lib.load_conversation(conversation_id)
+        
+        if conv_data:
+            # Restore messages
+            st.session_state.messages = conv_data.get("messages", [])
+            
+            # Restore conversation metadata
+            st.session_state.current_conversation_id = conv_data.get("id")
+            st.session_state.conversation_title = conv_data.get("title")
+            st.session_state.last_conversation_save_time = time.time()
+            st.session_state.last_save_message_count = len(st.session_state.messages)
+            
+            # Restore charts if any
+            if "stored_charts" in conv_data:
+                st.session_state.stored_charts = conv_data["stored_charts"]
+            
+            st.success(f"✅ Loaded conversation: {conv_data.get('title')}")
+            st.rerun()
+        else:
+            st.error("Failed to load conversation")
 
     # Model Settings Dialog Function
     @st.dialog("⚙️ Model Settings", width="large")
@@ -536,6 +704,16 @@ else:
                             # Set vector_db to None to indicate RAG is not available
                             st.session_state.vector_db = None
 
+    # Show unsaved changes warning banner (prominent at top)
+    if len(st.session_state.messages) > 0:
+        save_status = lib.get_conversation_save_status()
+        if save_status["has_unsaved"]:
+            unsaved_count = save_status["message_count"] - save_status["last_save_message_count"]
+            st.warning(f"⚠️ **Unsaved Changes:** You have {unsaved_count} message(s) not saved yet. Use the **💾 Save** button below to save your conversation.", icon="⚠️")
+            
+            # Inject JavaScript warning for browser navigation
+            lib.inject_navigation_warning(has_unsaved_changes=True, unsaved_count=unsaved_count)
+    
     # Check available data sources and show appropriate messages
     has_documents = ("vector_db" in st.session_state and st.session_state.vector_db is not None) or ("saved_anonymisation" in st.session_state)
     has_datasets = "tabular_datasets" in st.session_state and st.session_state.tabular_datasets
@@ -574,8 +752,8 @@ else:
                 else:
                     available_sources.append(f"{active_datasets}/{total_datasets} tabular dataset(s)")
         
-        # Show data sources and context optimization status
-        col1, col2 = st.columns([2, 1])
+        # Show data sources, context optimization, and save status
+        col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
             if available_sources:
                 sources_text = ', '.join(available_sources)
@@ -591,6 +769,22 @@ else:
             elif len(st.session_state.messages) > 10:
                 context_stats = lib.get_context_stats(st.session_state.messages)
                 st.success(f"🧠 Context: {context_stats['estimated_tokens']:,} tokens")
+        
+        with col3:
+            # Show conversation save status
+            save_status = lib.get_conversation_save_status()
+            if save_status["last_save_time"]:
+                time_since_save = int((time.time() - save_status["last_save_time"]) / 60)  # Minutes
+                if save_status["has_unsaved"]:
+                    unsaved_count = save_status["message_count"] - save_status["last_save_message_count"]
+                    st.warning(f"💾 {unsaved_count} unsaved", help=f"Last saved {time_since_save}m ago")
+                else:
+                    if time_since_save == 0:
+                        st.success("💾 Just saved", help="All messages saved")
+                    else:
+                        st.success(f"💾 Saved {time_since_save}m ago", help="All messages saved")
+            elif len(st.session_state.messages) > 0:
+                st.warning(f"💾 Not saved", help=f"{len(st.session_state.messages)} messages not saved")
 
     # Welcome message for first-time users (when no chat history exists)
     if not st.session_state.messages:
@@ -872,17 +1066,21 @@ Provide clear, actionable recommendations."""
     # Bottom action buttons - positioned for fixed placement via CSS
     bottom_buttons_container = st.container(key="bottom_buttons_container")
     with bottom_buttons_container:
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             if st.button(type="primary", label="💡 Prompt Ideas", key="templates_bottom_button", use_container_width=True, help="Get AI-powered prompt suggestions based on your content"):
                 show_prompt_assistant()
         
         with col2:
+            if st.button("💬 Conversations", key="conversations_bottom_button", use_container_width=True, help="Browse and load saved conversations"):
+                show_conversation_browser()
+        
+        with col3:
             if st.button("📊 Data Sources", key="data_sources_bottom_button", use_container_width=True, help="Manage your document and tabular data sources"):
                 lib.show_data_sources()
         
-        with col3:
+        with col4:
             if st.button("⚙️ Model Settings", key="model_settings_bottom_button", use_container_width=True, help="Configure AI model and system settings"):
                 show_model_settings()
     
@@ -1137,6 +1335,9 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                 st.error(error)
                 st.session_state.messages.append({"role": "assistant", "content": error})
         
+        # Trigger auto-save after processing response
+        auto_save_conversation()
+        
         # Force a rerun to ensure proper rendering
         st.rerun()
 
@@ -1145,10 +1346,15 @@ Please try rephrasing your question more specifically, and I'll be happy to help
         st.markdown("---")
         st.markdown("### 📋 Conversation Management")
         
-        # Use 4 columns for compact buttons
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        # Use 5 columns for compact buttons
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
         
         with col1:
+            # Manual save conversation button
+            if st.button("💾 Save", use_container_width=True, help="Manually save conversation"):
+                manual_save_conversation()
+        
+        with col2:
             # Download answers as DOCX
             doc_download = Document()
             if "saved_anonymisation" in st.session_state:
@@ -1174,24 +1380,25 @@ Please try rephrasing your question more specifically, and I'll be happy to help
             
             # Download button
             st.download_button(
-                label="Download DOCX",
+                label="📥 Download",
                 type="secondary",
                 data=bio.getvalue(),
                 file_name=f"ChatGPT Answers About {doc_title}.docx",
                 mime="docx",
                 key="download_conversation_btn",
-                use_container_width=True
+                use_container_width=True,
+                help="Download conversation as DOCX"
             )
         
-        with col2:
-            # Copy answers to clipboard
-            copy_clicked = st.button("Copy", use_container_width=True)
-        
         with col3:
-            # Clear conversation with confirmation
-            clear_clicked = st.button("Clear Chat", use_container_width=True)
+            # Copy answers to clipboard
+            copy_clicked = st.button("📋 Copy", use_container_width=True, help="Copy to clipboard")
         
         with col4:
+            # Clear conversation with confirmation
+            clear_clicked = st.button("🗑️ Clear", use_container_width=True, help="Clear chat history")
+        
+        with col5:
             # Save and proceed to reverse anonymization
             if "saved_anonymisation" in st.session_state:
                 entities = st.session_state["saved_anonymisation"]["Entities"]
@@ -1258,18 +1465,36 @@ Please try rephrasing your question more specifically, and I'll be happy to help
                     st.session_state.current_chart_id = None
                 if "current_chart_ids" in st.session_state:
                     st.session_state.current_chart_ids = []
+                # Clear conversation tracking
+                st.session_state.current_conversation_id = None
+                st.session_state.last_conversation_save_time = None
+                st.session_state.last_save_message_count = 0
                 # Clear confirmation state
                 st.session_state["confirm_clear_chat"] = False
                 st.success("✅ Chat history cleared successfully!")
                 st.rerun()
             else:
-                # Set confirmation state and show confirmation message
+                # Check for unsaved changes
+                save_status = lib.get_conversation_save_status()
+                
+                # Set confirmation state and show appropriate warning
                 st.session_state["confirm_clear_chat"] = True
-                st.warning("⚠️ Click 'Clear Chat' again to confirm. This action cannot be undone!")
+                
+                if save_status["has_unsaved"]:
+                    unsaved_count = save_status["message_count"] - save_status["last_save_message_count"]
+                    st.error(f"⚠️ **WARNING:** You have {unsaved_count} unsaved message(s)! Click '🗑️ Clear' again to confirm deletion.")
+                    st.info("💡 **Tip:** Use the '💾 Save' button to save your conversation before clearing.")
+                else:
+                    st.warning("⚠️ Click '🗑️ Clear' again to confirm. This action cannot be undone!")
         
         # Show any pending confirmation messages
         if st.session_state.get("confirm_clear_chat") and not clear_clicked:
-            st.warning("⚠️ Confirmation pending: Click 'Clear Chat' again to confirm deletion.")
+            save_status = lib.get_conversation_save_status()
+            if save_status["has_unsaved"]:
+                unsaved_count = save_status["message_count"] - save_status["last_save_message_count"]
+                st.error(f"⚠️ **Confirmation pending:** {unsaved_count} unsaved message(s) will be lost! Click '🗑️ Clear' again to confirm.")
+            else:
+                st.warning("⚠️ Confirmation pending: Click '🗑️ Clear' again to confirm deletion.")
 
 def display_tabular_sources():
     """Display available tabular data sources with management options"""
