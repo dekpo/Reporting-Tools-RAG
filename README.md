@@ -179,7 +179,11 @@ The app uses OpenAI's function calling with a sophisticated multi-tool agent sys
 ## Advanced Configuration
 - **Model Selection**: Choose from gpt-4o, gpt-4o-mini, gpt-4-turbo, or gpt-3.5-turbo based on your needs
 - **Debug Mode**: View detailed agent execution steps and tool usage
-- **Context Management**: Automatic optimization for long conversations
+- **Context Management**: Automatic optimization for long conversations with intelligent token management
+  - Auto-trimming when approaching model token limits (80% threshold)
+  - Smart conversation loading (summarizes older messages when loading 30+ message conversations)
+  - Real-time token warnings based on model capabilities (GPT-3.5: 16K, GPT-4o: 128K)
+  - UI display optimization (shows last 50 messages for conversations with 50+ messages)
 - **Max Iterations**: Configure analysis depth (3-20 tool calls per response)
 - **Data Source Management**: Enable/disable specific documents or datasets
 - **Auto-Save Settings**: Configure conversation backup frequency (3-20 messages)

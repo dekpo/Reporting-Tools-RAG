@@ -214,7 +214,7 @@ else:
         st.session_state.auto_save_enabled = True
     
     if "auto_save_interval" not in st.session_state:
-        st.session_state.auto_save_interval = 5  # Save every 5 messages
+        st.session_state.auto_save_interval = 2  # Save every 2 messages (1 Q&A exchange)
 
     # Initialize client
     client = OpenAI(api_key=st.session_state["gpt_api_key"])
@@ -349,7 +349,7 @@ else:
         
         # Check if we should save based on message count
         last_save_count = st.session_state.get("last_save_message_count", 0)
-        auto_save_interval = st.session_state.get("auto_save_interval", 5)
+        auto_save_interval = st.session_state.get("auto_save_interval", 2)
         
         # Auto-save if we've added enough new messages
         if len(messages) - last_save_count >= auto_save_interval:
@@ -365,6 +365,9 @@ else:
                 st.session_state.current_conversation_id = conversation_id
                 st.session_state.last_conversation_save_time = time.time()
                 st.session_state.last_save_message_count = len(messages)
+                
+                # Show subtle toast notification for auto-save
+                st.toast("💾 Conversation auto-saved", icon="✅")
                 
                 if st.session_state.get("show_debug", False):
                     st.success(f"💾 Auto-saved conversation ({len(messages)} messages)")
@@ -436,24 +439,109 @@ else:
                         st.write(f"**Saved:** {conv.get('last_saved', 'Unknown')[:10]}")
                 
                 with col3:
-                    # Load button
-                    if st.button("📂 Load", key=f"load_{conv['id']}", use_container_width=True):
-                        # Check for unsaved changes
-                        save_status = lib.get_conversation_save_status()
-                        if save_status["has_unsaved"] and len(st.session_state.messages) > 0:
-                            st.warning("⚠️ You have unsaved changes in your current conversation!")
-                            if st.button("⚠️ Load anyway (lose unsaved)", key=f"confirm_load_{conv['id']}", type="secondary"):
-                                load_conversation_data(conv['id'])
-                        else:
-                            load_conversation_data(conv['id'])
+                    # Action buttons row 1
+                    col_load, col_fork, col_rename = st.columns(3)
                     
-                    # Delete button
-                    if st.button("🗑️ Delete", key=f"delete_{conv['id']}", use_container_width=True):
-                        if lib.delete_conversation(conv['id']):
-                            st.success(f"Deleted conversation: {conv['title']}")
+                    with col_load:
+                        # Load button
+                        if st.button("📂", key=f"load_{conv['id']}", use_container_width=True, help="Load conversation"):
+                            # Check for unsaved changes
+                            save_status = lib.get_conversation_save_status()
+                            if save_status["has_unsaved"] and len(st.session_state.messages) > 0:
+                                st.warning("⚠️ You have unsaved changes in your current conversation!")
+                                if st.button("⚠️ Load anyway (lose unsaved)", key=f"confirm_load_{conv['id']}", type="secondary"):
+                                    load_conversation_data(conv['id'])
+                            else:
+                                load_conversation_data(conv['id'])
+                    
+                    with col_fork:
+                        # Fork button (create numbered copy)
+                        if st.button("🔀", key=f"fork_{conv['id']}", use_container_width=True, help="Create numbered copy"):
+                            fork_conversation(conv['id'], conv['title'])
+                    
+                    with col_rename:
+                        # Rename button
+                        if st.button("✏️", key=f"rename_btn_{conv['id']}", use_container_width=True, help="Rename conversation"):
+                            st.session_state[f"renaming_{conv['id']}"] = True
                             st.rerun()
-                        else:
-                            st.error("Failed to delete conversation")
+                    
+                    # Rename input (shown when rename button clicked)
+                    if st.session_state.get(f"renaming_{conv['id']}", False):
+                        st.markdown("**✏️ Rename Conversation:**")
+                        new_title = st.text_input(
+                            "New title:",
+                            value=conv['title'],
+                            key=f"rename_input_{conv['id']}",
+                            label_visibility="collapsed"
+                        )
+                        
+                        col_save, col_cancel = st.columns(2)
+                        with col_save:
+                            if st.button("💾 Save", key=f"rename_save_{conv['id']}", use_container_width=True):
+                                if new_title and new_title.strip():
+                                    # Check if title already exists (excluding current conversation)
+                                    unique_title = lib.get_unique_conversation_title(new_title, exclude_id=conv['id'])
+                                    
+                                    if lib.rename_conversation(conv['id'], unique_title):
+                                        st.success(f"✅ Renamed to: {unique_title}")
+                                        st.session_state[f"renaming_{conv['id']}"] = False
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to rename")
+                                else:
+                                    st.error("Title cannot be empty")
+                        
+                        with col_cancel:
+                            if st.button("❌ Cancel", key=f"rename_cancel_{conv['id']}", use_container_width=True):
+                                st.session_state[f"renaming_{conv['id']}"] = False
+                                st.rerun()
+                    
+                    # Delete button with confirmation
+                    pending_delete_key = f"pending_delete_{conv['id']}"
+                    
+                    if st.session_state.get(pending_delete_key, False):
+                        # Show confirmation
+                        st.error(f"⚠️ Confirm delete?")
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.button("✅ Yes, Delete", key=f"confirm_yes_{conv['id']}", type="secondary", use_container_width=True):
+                                if lib.delete_conversation(conv['id']):
+                                    st.success(f"Deleted: {conv['title']}")
+                                    st.session_state[pending_delete_key] = False
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete")
+                                    st.session_state[pending_delete_key] = False
+                        with col_b:
+                            if st.button("❌ Cancel", key=f"confirm_no_{conv['id']}", use_container_width=True):
+                                st.session_state[pending_delete_key] = False
+                                st.rerun()
+                    else:
+                        # Show delete button
+                        if st.button("🗑️ Delete", key=f"delete_{conv['id']}", use_container_width=True):
+                            st.session_state[pending_delete_key] = True
+                            st.rerun()
+    
+    def fork_conversation(conversation_id, original_title):
+        """Create a numbered copy of an existing conversation"""
+        conv_data = lib.load_conversation(conversation_id)
+        
+        if conv_data:
+            # Generate unique numbered title
+            new_title = lib.get_unique_conversation_title(original_title)
+            
+            # Save as new conversation with numbered title
+            new_conv_id = lib.save_conversation(
+                messages=conv_data.get("messages", []),
+                conversation_id=None,  # Force new ID
+                title=new_title,
+                auto_save=False
+            )
+            
+            st.success(f"✅ Created: {new_title}")
+            st.rerun()
+        else:
+            st.error("Failed to fork conversation")
     
     def load_conversation_data(conversation_id):
         """Load a conversation and restore it to the current session"""
@@ -461,7 +549,26 @@ else:
         
         if conv_data:
             # Restore messages
-            st.session_state.messages = conv_data.get("messages", [])
+            loaded_messages = conv_data.get("messages", [])
+            original_count = len(loaded_messages)
+            
+            # Apply context window management if conversation is large
+            # This prevents token overflow when loading old conversations
+            if original_count > 30:
+                # Manage context to prevent token overflow
+                loaded_messages = lib.manage_context_window(
+                    loaded_messages,
+                    max_context_messages=30,  # Keep last 30 messages
+                    preserve_recent=20  # Always preserve last 20
+                )
+                
+                # Show info about context management
+                trimmed_count = original_count - len(loaded_messages)
+                if trimmed_count > 0:
+                    st.info(f"ℹ️ Loaded conversation with {original_count} messages. {trimmed_count} older messages were summarized to optimize performance.")
+            
+            st.session_state.messages = loaded_messages
+            st.session_state.original_message_count = original_count  # Track original size
             
             # Restore conversation metadata
             st.session_state.current_conversation_id = conv_data.get("id")
@@ -777,47 +884,177 @@ else:
                 time_since_save = int((time.time() - save_status["last_save_time"]) / 60)  # Minutes
                 if save_status["has_unsaved"]:
                     unsaved_count = save_status["message_count"] - save_status["last_save_message_count"]
-                    st.warning(f"💾 {unsaved_count} unsaved", help=f"Last saved {time_since_save}m ago")
+                    st.warning(f"💾 {unsaved_count} unsaved")
                 else:
                     if time_since_save == 0:
-                        st.success("💾 Just saved", help="All messages saved")
+                        st.success("💾 Just saved")
                     else:
-                        st.success(f"💾 Saved {time_since_save}m ago", help="All messages saved")
+                        st.success(f"💾 Saved {time_since_save}m ago")
             elif len(st.session_state.messages) > 0:
-                st.warning(f"💾 Not saved", help=f"{len(st.session_state.messages)} messages not saved")
+                st.warning(f"💾 Not saved")
 
     # Welcome message for first-time users (when no chat history exists)
     if not st.session_state.messages:
-        with st.chat_message("assistant"):
-            st.markdown("### Hello! How can I help you today?")
+        # Check if user explicitly chose to start new chat
+        if st.session_state.get("skip_conversation_welcome", False):
+            # User clicked "Start New Chat" - skip the welcome screen
+            st.session_state.skip_conversation_welcome = False
+            # Show nothing, let user start typing
+            pass
+        else:
+            # Check if there are saved conversations
+            saved_conversations = lib.list_conversations(limit=3)
             
-            # Create a concise welcome message based on available data sources
-            if has_documents and has_datasets:
-                welcome_msg = """I can analyze your **documents** and **datasets** to help you:
+            if saved_conversations:
+                # Show resume/start new interface when saved conversations exist
+                with st.chat_message("assistant"):
+                    st.markdown("### 💬 Welcome Back!")
+                    st.markdown(f"You have **{len(saved_conversations)}** saved conversation(s). Would you like to resume or start fresh?")
+                    
+                    # Action buttons
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("📂 Resume Last Session", use_container_width=True, type="primary"):
+                            # Load the most recent conversation
+                            most_recent = saved_conversations[0]
+                            load_conversation_data(most_recent['id'])
+                    
+                    with col2:
+                        if st.button("✨ Start New Chat", use_container_width=True):
+                            # Clear any loaded conversation state and start fresh
+                            st.session_state.skip_conversation_welcome = True
+                            # Clear conversation tracking to start completely fresh
+                            st.session_state.current_conversation_id = None
+                            st.session_state.conversation_title = None
+                            st.session_state.last_save_message_count = 0
+                            st.rerun()
+                    
+                    st.markdown("---")
+                    st.markdown("**📚 Recent Conversations:**")
+                    
+                    # Show list of recent conversations
+                    for idx, conv in enumerate(saved_conversations, 1):
+                        with st.container():
+                            col1, col2, col3 = st.columns([3, 2, 1])
+                            
+                            with col1:
+                                st.markdown(f"**{idx}. {conv['title']}**")
+                            
+                            with col2:
+                                # Format timestamp
+                                try:
+                                    from datetime import datetime
+                                    saved_date = datetime.fromisoformat(conv['last_saved'])
+                                    time_ago = datetime.now() - saved_date
+                                    
+                                    if time_ago.days > 0:
+                                        time_str = f"{time_ago.days}d ago"
+                                    elif time_ago.seconds >= 3600:
+                                        time_str = f"{time_ago.seconds // 3600}h ago"
+                                    elif time_ago.seconds >= 60:
+                                        time_str = f"{time_ago.seconds // 60}m ago"
+                                    else:
+                                        time_str = "Just now"
+                                    
+                                    st.caption(f"{conv['message_count']} msgs • {time_str}")
+                                except:
+                                    st.caption(f"{conv['message_count']} messages")
+                            
+                            with col3:
+                                if st.button("📂", key=f"load_welcome_{conv['id']}", help="Load this conversation"):
+                                    load_conversation_data(conv['id'])
+                    
+                    st.markdown("---")
+                    st.markdown("💡 **Tip:** Click **💬 Conversations** button below to see all saved conversations")
+            else:
+                # Show normal welcome message when no saved conversations exist
+                with st.chat_message("assistant"):
+                    st.markdown("### Hello! How can I help you today?")
+                    
+                    # Create a concise welcome message based on available data sources
+                    if has_documents and has_datasets:
+                        welcome_msg = """I can analyze your **documents** and **datasets** to help you:
 • Summarize key insights • Create charts and visualizations • Extract action items • Generate reports
 
 💡 **Try asking:** *"What are the key insights from my data?"* or *"Create a summary with charts"* or click the **Prompt Ideas** button below"""
-            
-            elif has_documents:
-                welcome_msg = """I can analyze your **text documents** to help you:
+                    
+                    elif has_documents:
+                        welcome_msg = """I can analyze your **text documents** to help you:
 • Summarize key points • Extract action items • Answer specific questions • Create reports
 
 💡 **Try asking:** *"What were the main decisions?"* or *"Create a summary of key themes"* or click the **Prompt Ideas** button below"""
-            
-            elif has_datasets:
-                welcome_msg = """I can analyze your **tabular data** to help you:
+                    
+                    elif has_datasets:
+                        welcome_msg = """I can analyze your **tabular data** to help you:
 • Create charts and visualizations • Analyze trends and patterns • Generate insights
 
 💡 **Try asking:** *"Show me the top 10 items"* or *"Create a trend chart over time"* or click the **Prompt Ideas** button below"""
-            
-            else:
-                welcome_msg = """I can help you analyze documents and datasets! 
+                    
+                    else:
+                        welcome_msg = """I can help you analyze documents and datasets! 
 🚀 **To get started:** Upload data on the Home page, then ask me questions about it or click the **Prompt Ideas** button below"""
-            
-            st.markdown(welcome_msg)
+                    
+                    st.markdown(welcome_msg)
 
+    # ===== CONVERSATION TOKEN MANAGEMENT & WARNINGS =====
+    # Check if we need to warn about token limits or apply automatic trimming
+    current_model = st.session_state.get("openai_model", "gpt-3.5-turbo")
+    context_stats = lib.get_context_stats(st.session_state.messages)
+    
+    # Get model-specific token limits
+    limit_info = lib.get_model_token_limit(current_model)
+    estimated_tokens = context_stats["estimated_tokens"]
+    
+    # Show warning if approaching token limits
+    if estimated_tokens > limit_info["warning_threshold"]:
+        warning_pct = int((estimated_tokens / limit_info["limit"]) * 100)
+        st.warning(f"⚠️ **Token Limit Warning**: Your conversation is using ~{estimated_tokens:,} tokens ({warning_pct}% of {limit_info['name']}'s {limit_info['limit']:,} token limit). Consider starting a new conversation or the AI may not have full context.")
+    
+    # Auto-trim if conversation is getting very large (90% of limit)
+    auto_trim_threshold = int(limit_info["limit"] * 0.9)
+    if estimated_tokens > auto_trim_threshold and len(st.session_state.messages) > 20:
+        # Apply automatic context management
+        original_count = len(st.session_state.messages)
+        st.session_state.messages = lib.manage_context_window(
+            st.session_state.messages,
+            max_context_messages=20,
+            preserve_recent=15
+        )
+        trimmed_count = original_count - len(st.session_state.messages)
+        if trimmed_count > 0:
+            st.info(f"🔄 **Auto-optimization**: Conversation trimmed to prevent token overflow. {trimmed_count} older messages summarized.")
+    
+    # ===== UI DISPLAY TRUNCATION =====
+    # For better performance, only display recent messages if conversation is very long
+    messages_to_display = st.session_state.messages
+    display_limit = 50  # Show last 50 messages by default
+    show_all_messages = st.session_state.get("show_all_messages", False)
+    
+    if len(st.session_state.messages) > display_limit and not show_all_messages:
+        # Show info about hidden messages
+        hidden_count = len(st.session_state.messages) - display_limit
+        st.info(f"📜 Showing last {display_limit} messages ({hidden_count} older messages hidden for performance)")
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("📖 Show Full History", key="show_full_history"):
+                st.session_state.show_all_messages = True
+                st.rerun()
+        with col2:
+            st.caption(f"Total conversation: {len(st.session_state.messages)} messages (~{estimated_tokens:,} tokens)")
+        
+        # Only display recent messages
+        messages_to_display = st.session_state.messages[-display_limit:]
+    elif show_all_messages and len(st.session_state.messages) > display_limit:
+        # User chose to see all messages, show option to collapse
+        st.success(f"📖 Showing all {len(st.session_state.messages)} messages")
+        if st.button("📋 Show Recent Only", key="show_recent_only"):
+            st.session_state.show_all_messages = False
+            st.rerun()
+    
     # Display chat messages directly (following Streamlit best practices)
-    for message in st.session_state.messages:
+    for message in messages_to_display:
         with st.chat_message(message["role"]):
             # Display the message content
             message_content = message["content"]
@@ -1338,8 +1575,28 @@ Please try rephrasing your question more specifically, and I'll be happy to help
         # Trigger auto-save after processing response
         auto_save_conversation()
         
-        # Force a rerun to ensure proper rendering
-        st.rerun()
+        # Apply automatic context trimming if conversation is getting too large
+        # This prevents gradual token accumulation over long sessions
+        if len(st.session_state.messages) > 40:
+            context_stats = lib.get_context_stats(st.session_state.messages)
+            
+            # Get current model's limit
+            current_model = st.session_state.get("openai_model", "gpt-3.5-turbo")
+            limit_info = lib.get_model_token_limit(current_model)
+            token_limit = limit_info["limit"]
+            
+            # If we're at 80% of the limit, start trimming proactively
+            if context_stats["estimated_tokens"] > (token_limit * 0.8):
+                original_count = len(st.session_state.messages)
+                st.session_state.messages = lib.manage_context_window(
+                    st.session_state.messages,
+                    max_context_messages=30,
+                    preserve_recent=20
+                )
+                trimmed_count = original_count - len(st.session_state.messages)
+                
+                if trimmed_count > 0 and st.session_state.get("show_debug", False):
+                    st.info(f"🔄 Auto-trimmed {trimmed_count} older messages to maintain optimal performance.")
 
     # Conversation Management - Always visible at bottom when there are messages
     if len(st.session_state.messages) > 0:
