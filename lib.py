@@ -270,6 +270,38 @@ def get_default_model():
     """
     return "gpt-4o"
 
+def get_model_token_limit(model_name):
+    """
+    Get the token limit for a specific model.
+    
+    Args:
+        model_name: The name of the OpenAI model
+    
+    Returns:
+        dict: Dictionary with 'limit', 'warning_threshold', and 'name' keys
+    """
+    model_limits = {
+        "gpt-3.5-turbo": {"limit": 16000, "warning_threshold": 12000, "name": "GPT-3.5-turbo"},
+        "gpt-4": {"limit": 8000, "warning_threshold": 6000, "name": "GPT-4"},
+        "gpt-4-32k": {"limit": 32000, "warning_threshold": 25000, "name": "GPT-4-32K"},
+        "gpt-4-turbo": {"limit": 128000, "warning_threshold": 100000, "name": "GPT-4-turbo"},
+        "gpt-4-turbo-preview": {"limit": 128000, "warning_threshold": 100000, "name": "GPT-4-turbo-preview"},
+        "gpt-4o": {"limit": 128000, "warning_threshold": 100000, "name": "GPT-4o"},
+        "gpt-4o-mini": {"limit": 128000, "warning_threshold": 100000, "name": "GPT-4o-mini"}
+    }
+    
+    # Check for exact match first
+    if model_name in model_limits:
+        return model_limits[model_name]
+    
+    # Check for partial matches (e.g., "gpt-4o-2024-05-13" matches "gpt-4o")
+    for key in model_limits.keys():
+        if key in model_name:
+            return model_limits[key]
+    
+    # Default to GPT-3.5-turbo limits if unknown model
+    return model_limits["gpt-3.5-turbo"]
+
 def validate_model_availability(client, model_name):
     """
     Validate that a specific model is available for the given API key.
@@ -1720,6 +1752,7 @@ def generate_conversation_id():
 def save_conversation(messages, conversation_id=None, title=None, auto_save=False):
     """
     Save conversation messages to disk.
+    Merges with existing conversation if same title exists (prevents duplicates).
     
     Args:
         messages: List of message dictionaries with 'role' and 'content'
@@ -1732,10 +1765,6 @@ def save_conversation(messages, conversation_id=None, title=None, auto_save=Fals
     """
     ensure_conversations_directory()
     
-    # Generate new ID if not provided
-    if conversation_id is None:
-        conversation_id = generate_conversation_id()
-    
     # Auto-generate title if not provided
     if title is None:
         # Try to use document title from session state
@@ -1745,6 +1774,18 @@ def save_conversation(messages, conversation_id=None, title=None, auto_save=Fals
             # Use first user message as title (truncated)
             first_user_msg = next((m['content'] for m in messages if m['role'] == 'user'), 'Conversation')
             title = first_user_msg[:50] + "..." if len(first_user_msg) > 50 else first_user_msg
+    
+    # If no conversation_id provided, search for existing conversation with same title
+    # This prevents creating duplicate conversations with the same name
+    if conversation_id is None and title:
+        existing_conv = find_conversation_by_title(title)
+        if existing_conv:
+            conversation_id = existing_conv['id']
+            # Merging with existing conversation - will update it
+    
+    # Generate new ID only if still no ID found
+    if conversation_id is None:
+        conversation_id = generate_conversation_id()
     
     # Prepare conversation data
     conversation_data = {
@@ -1827,6 +1868,83 @@ def list_conversations(limit=50):
     conversations.sort(key=lambda x: x.get("last_saved", ""), reverse=True)
     
     return conversations[:limit]
+
+def find_conversation_by_title(title):
+    """
+    Find an existing conversation by its exact title.
+    
+    Args:
+        title: The conversation title to search for
+    
+    Returns:
+        Conversation metadata dict if found, None otherwise
+    """
+    conversations = list_conversations(limit=1000)  # Get all conversations
+    
+    for conv in conversations:
+        if conv.get('title') == title:
+            return conv
+    
+    return None
+
+def get_unique_conversation_title(base_title, exclude_id=None):
+    """
+    Generate a unique conversation title by appending (2), (3), etc. if needed.
+    
+    Args:
+        base_title: The desired title
+        exclude_id: Optional conversation ID to exclude from check (for renaming)
+    
+    Returns:
+        Unique title with number appended if necessary
+    """
+    conversations = list_conversations(limit=1000)
+    
+    # Get all existing titles (excluding the conversation being renamed)
+    existing_titles = [
+        conv['title'] for conv in conversations 
+        if conv['id'] != exclude_id
+    ]
+    
+    # If base title doesn't exist, use it as-is
+    if base_title not in existing_titles:
+        return base_title
+    
+    # Find the next available number
+    counter = 2
+    while f"{base_title} ({counter})" in existing_titles:
+        counter += 1
+    
+    return f"{base_title} ({counter})"
+
+def rename_conversation(conversation_id, new_title):
+    """
+    Rename an existing conversation.
+    
+    Args:
+        conversation_id: The ID of the conversation to rename
+        new_title: The new title for the conversation
+    
+    Returns:
+        True if renamed successfully, False otherwise
+    """
+    conv_data = load_conversation(conversation_id)
+    
+    if conv_data:
+        # Update the title
+        conv_data['title'] = new_title
+        conv_data['last_saved'] = datetime.now().isoformat()
+        
+        # Save back to file
+        conv_path = os.path.join(get_conversations_directory(), f"{conversation_id}.json")
+        try:
+            with open(conv_path, 'w', encoding='utf-8') as f:
+                json.dump(conv_data, f, indent=2, ensure_ascii=False)
+            return True
+        except (IOError, OSError):
+            return False
+    
+    return False
 
 def delete_conversation(conversation_id):
     """
@@ -3217,7 +3335,7 @@ When users ask questions:
         handle_parsing_errors=True,
         max_iterations=max_iterations,  # Use configurable value
         return_intermediate_steps=True,  # Capture steps for UI display
-        early_stopping_method="generate"  # Return partial results instead of error when max iterations reached
+        early_stopping_method="force"  # Return partial results instead of error when max iterations reached
     )
     
     return agent_executor
