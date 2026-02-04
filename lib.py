@@ -11,6 +11,8 @@ import shutil
 import re
 
 # For visualization capabilities
+VISUALIZATION_AVAILABLE = False
+VISUALIZATION_ERROR_MSG = None
 try:
     # Suppress matplotlib font cache messages for PyInstaller exe
     import warnings
@@ -37,12 +39,16 @@ try:
     import plotly.express as px
     import plotly.graph_objects as go
     VISUALIZATION_AVAILABLE = True
-except ImportError:
-    VISUALIZATION_AVAILABLE = False
-    st.warning("Visualization libraries not available. Install with: pip install matplotlib seaborn plotly")
+except ImportError as e:
+    VISUALIZATION_ERROR_MSG = f"Visualization libraries not available: {str(e)}"
+    print(f"Warning: {VISUALIZATION_ERROR_MSG}")
 
 # For RAG functionality - wrapped in try/except to handle missing dependencies
 RAG_AVAILABLE = True
+RAG_ERROR_MSG = None
+LANGCHAIN_TEXT_SPLITTER_ERROR = None
+LANGCHAIN_DOCUMENT_ERROR = None
+
 try:
     import chromadb
     from chromadb.config import Settings
@@ -56,7 +62,8 @@ try:
             from langchain_text_splitters import RecursiveCharacterTextSplitter
         except ImportError:
             RecursiveCharacterTextSplitter = None
-            st.warning("RecursiveCharacterTextSplitter not available. Please install langchain.")
+            LANGCHAIN_TEXT_SPLITTER_ERROR = "RecursiveCharacterTextSplitter not available. Please install langchain."
+            print(f"Warning: {LANGCHAIN_TEXT_SPLITTER_ERROR}")
     
     try:
         from langchain_core.documents import Document
@@ -65,10 +72,12 @@ try:
             from langchain.schema import Document
         except ImportError:
             Document = None
-            st.warning("Document class not available. Please install langchain-core.")
+            LANGCHAIN_DOCUMENT_ERROR = "Document class not available. Please install langchain-core."
+            print(f"Warning: {LANGCHAIN_DOCUMENT_ERROR}")
     
-except ImportError:
-    st.warning("RAG dependencies are missing. Please install required packages with `pip install chromadb langchain`")
+except ImportError as e:
+    RAG_ERROR_MSG = f"RAG dependencies are missing: {str(e)}"
+    print(f"Warning: {RAG_ERROR_MSG}")
     RAG_AVAILABLE = False
 
 # Modules
@@ -328,10 +337,28 @@ def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
+def show_import_warnings():
+    """
+    Display any warnings from failed imports.
+    Must be called AFTER st.set_page_config().
+    """
+    if VISUALIZATION_ERROR_MSG:
+        st.warning(VISUALIZATION_ERROR_MSG)
+    if RAG_ERROR_MSG:
+        st.warning(RAG_ERROR_MSG)
+    if LANGCHAIN_TEXT_SPLITTER_ERROR:
+        st.warning(LANGCHAIN_TEXT_SPLITTER_ERROR)
+    if LANGCHAIN_DOCUMENT_ERROR:
+        st.warning(LANGCHAIN_DOCUMENT_ERROR)
+
 def app_config():
     st.set_page_config(page_title="UN CEB - Reporting Tools",page_icon="./assets/favicon.ico",layout="wide")
     st.logo("./assets/ceb-logo-full-text-blue.svg", link="https://unsceb.org/", icon_image="./assets/ceb-logo-blue.svg")
     local_css("./assets/css/style.css")
+    
+    # Show any import warnings that occurred during module load
+    show_import_warnings()
+    
     global current_timestamp
     current_timestamp = int(time.time())
     global current_datetime
@@ -850,7 +877,8 @@ def ensure_rag_directories_exist():
         try:
             os.makedirs(directory, exist_ok=True)
         except Exception as e:
-            st.error(f"Could not create directory {directory}: {e}")
+            # Use print instead of st.error to avoid calling Streamlit before set_page_config
+            print(f"Error: Could not create directory {directory}: {e}")
 
 class OpenAIEmbeddingFunction:
     """
