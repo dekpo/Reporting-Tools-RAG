@@ -1,5 +1,11 @@
 # DTN Reporting Tools
-A comprehensive AI-powered platform for analyzing documents and data with advanced anonymization, multi-format support, and intelligent decision support through RAG (Retrieval-Augmented Generation).
+
+A comprehensive AI-powered platform for analyzing documents and data with advanced anonymization, multi-format support, and intelligent decision support through RAG (Retrieval-Augmented Generation). Built for the UN System CEB Secretariat (Geneva).
+
+| | |
+|---|---|
+| **Source** | https://github.com/dekpo/Reporting-Tools-RAG |
+| Stack | Python, Streamlit, LangChain, OpenAI, SpaCy |
 
 ## Overview
 This application provides an intelligent workflow for processing sensitive documents, meeting transcripts, and data files with **no memory limits** and persistent storage:
